@@ -1130,16 +1130,19 @@ impl SudoByContract {
         let mut r = self.load(request_id);
         self.settle(&mut r);
 
+        // Order matters for the audit trail: an attempt outside the capability
+        // is recorded as a scope escalation even if the capability is also
+        // spent, expired or revoked by now.
         let denial: Option<(&str, String)> = if r.resource_id != resource.id {
             Some(("wrong_resource", format!("capability is bound to {}, not {}", r.resource_id, resource.id)))
         } else if resource.status != ResourceStatus::Active {
             Some(("resource_disabled", "this resource is disabled".into()))
+        } else if action != r.action {
+            Some(("out_of_scope", format!("capability permits only {}", r.action)))
         } else {
             match r.state {
                 RequestState::Active => {
-                    if action != r.action {
-                        Some(("out_of_scope", format!("capability permits only {}", r.action)))
-                    } else if r.uses >= r.max_uses {
+                    if r.uses >= r.max_uses {
                         Some(("exhausted", "all permitted uses are consumed".into()))
                     } else {
                         None

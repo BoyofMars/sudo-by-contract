@@ -239,6 +239,19 @@ fn hero_flow_request_approve_issue_execute_deny_expire() {
     assert_eq!(a.stats.actions_denied, 3);
 }
 
+/// Regression from the live testnet run: after the single use was consumed,
+/// `restart sshd` was labelled `exhausted`. It must be recorded as what it is.
+#[test]
+fn scope_escalation_is_labelled_even_after_the_capability_is_spent() {
+    let mut w = world();
+    let id = approved_active(&mut w, 600);
+    assert!(consume(&mut w, &gate_key(), id, "service.restart:checkout-api").allowed);
+    let d = consume(&mut w, &gate_key(), id, "service.restart:sshd");
+    assert_eq!(d.code, "out_of_scope");
+    let again = consume(&mut w, &gate_key(), id, "service.restart:checkout-api");
+    assert_eq!(again.code, "exhausted");
+}
+
 #[test]
 fn expiry_is_enforced_by_block_time() {
     let mut w = world();
