@@ -42,7 +42,7 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 | No wallet needed | Hand-written borsh transactions match `@near-js/transactions` byte-for-byte; WebCrypto Ed25519 signing in browser and Node. |
 | SDK, CLI, relay, MCP | 33 offline tests; `tsc` clean. |
 | Live testnet end-to-end | **22/22** with `scripts/e2e-testnet.ts`: the testnet MPC network signed the certificate 6.7 s after approval, `ssh-keygen` verified it, and the real gate binary enforced scope, single use, revocation (→ KRL) and expiry through the deployed contract. The first live run caught two bugs the offline tests missed; both are fixed ([docs/LIVE_RUN.md](docs/LIVE_RUN.md)). |
-| Real sshd | `sandbox/ci/sshd-integration.sh` runs OpenSSH with the generated config in CI (Linux). Not run on the Windows machine this was built on. |
+| Real sshd | **14/14** in CI on Linux (`sandbox/ci/sshd-integration.sh`): OpenSSH with the generated config and the real gate executes the approved restart; denies `cat /etc/shadow`, out-of-scope, second use and injected commands; refuses shells, PTYs and port forwarding; and sshd itself rejects expired, wrong-host, revoked and certificate-less logins. |
 
 Run everything that runs offline:
 
