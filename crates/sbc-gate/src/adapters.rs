@@ -1,5 +1,6 @@
-//! Typed action → fixed argv. The agent's text never reaches a shell or an
-//! argv: only the validated target string does, as one argv element.
+//! Typed action → fixed argv, and the sudoers rules that permit exactly those
+//! argvs. The argv builder itself lives in `sbc_core::plan` so the browser
+//! playground runs the same code as this gate.
 //!
 //! The agent logs in as an unprivileged user (`sbc-agent`). Privileged
 //! actions go through `sudo -n` with sudoers rules that list the exact
@@ -8,61 +9,19 @@
 
 use crate::config::Backend;
 use sbc_core::action::{ActionKind, ParsedCommand};
+use sbc_core::plan::ServiceManager;
+pub use sbc_core::plan::{log_bucket, JOURNALCTL, LOG_BUCKETS, SUDO, SUPERVISORCTL, SYSTEMCTL};
 
-pub const SUDO: &str = "/usr/bin/sudo";
-pub const SYSTEMCTL: &str = "/usr/bin/systemctl";
-pub const JOURNALCTL: &str = "/usr/bin/journalctl";
-pub const SUPERVISORCTL: &str = "/usr/bin/supervisorctl";
-
-/// Log sizes are bucketed so sudoers can list them exactly.
-pub const LOG_BUCKETS: &[u32] = &[50, 100, 200, 500, 1000];
-
-pub fn log_bucket(n: u32) -> u32 {
-    *LOG_BUCKETS.iter().find(|b| **b >= n).unwrap_or(&1000)
-}
-
-fn supervisor_tail_bytes(lines: u32) -> u32 {
-    lines * 160
+fn manager(backend: Backend) -> ServiceManager {
+    match backend {
+        Backend::Supervisor => ServiceManager::Supervisor,
+        Backend::Systemd | Backend::DryRun => ServiceManager::Systemd,
+    }
 }
 
 /// The exact argv the gate will execute for a parsed command.
 pub fn argv(backend: Backend, cmd: &ParsedCommand) -> Vec<String> {
-    let t = cmd.action.target.clone();
-    let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-    match (backend, cmd.action.kind) {
-        (Backend::Systemd | Backend::DryRun, ActionKind::ServiceRestart) => {
-            let mut v = s(&[SUDO, "-n", SYSTEMCTL, "restart"]);
-            v.push(t);
-            v
-        }
-        (Backend::Systemd | Backend::DryRun, ActionKind::ServiceStatus) => {
-            let mut v = s(&[SUDO, "-n", SYSTEMCTL, "status", "--no-pager"]);
-            v.push(t);
-            v
-        }
-        (Backend::Systemd | Backend::DryRun, ActionKind::LogsRead) => {
-            let mut v = s(&[SUDO, "-n", JOURNALCTL, "-u"]);
-            v.push(t);
-            v.extend(s(&["-n", &log_bucket(cmd.params.log_lines).to_string(), "--no-pager"]));
-            v
-        }
-        (Backend::Supervisor, ActionKind::ServiceRestart) => {
-            let mut v = s(&[SUDO, "-n", SUPERVISORCTL, "restart"]);
-            v.push(t);
-            v
-        }
-        (Backend::Supervisor, ActionKind::ServiceStatus) => {
-            let mut v = s(&[SUDO, "-n", SUPERVISORCTL, "status"]);
-            v.push(t);
-            v
-        }
-        (Backend::Supervisor, ActionKind::LogsRead) => {
-            let bytes = supervisor_tail_bytes(log_bucket(cmd.params.log_lines));
-            let mut v = s(&[SUDO, "-n", SUPERVISORCTL, "tail", &format!("-{}", bytes)]);
-            v.push(t);
-            v
-        }
-    }
+    sbc_core::plan::argv(manager(backend), cmd)
 }
 
 fn sudoers_escape(arg: &str) -> String {
@@ -120,6 +79,7 @@ mod tests {
     fn argv_never_contains_agent_text() {
         let p = parse_command("sudo systemctl restart checkout-api").unwrap();
         assert_eq!(argv(Backend::Systemd, &p), vec![SUDO, "-n", SYSTEMCTL, "restart", "checkout-api"]);
+        assert_eq!(argv(Backend::DryRun, &p), vec![SUDO, "-n", SYSTEMCTL, "restart", "checkout-api"]);
         assert_eq!(argv(Backend::Supervisor, &p), vec![SUDO, "-n", SUPERVISORCTL, "restart", "checkout-api"]);
         let l = parse_command("journalctl -u checkout-api -n 70").unwrap();
         assert_eq!(argv(Backend::Systemd, &l), vec![SUDO, "-n", JOURNALCTL, "-u", "checkout-api", "-n", "100", "--no-pager"]);

@@ -12,6 +12,7 @@
 #![forbid(unsafe_code)]
 
 pub mod action;
+pub mod plan;
 pub mod redact;
 pub mod ssh;
 pub mod validate;
