@@ -1,4 +1,4 @@
-//! End-to-end test of the forced-command path against a mock NEAR RPC.
+﻿//! End-to-end test of the forced-command path against a mock NEAR RPC.
 //!
 //! The mock decodes every transaction the gate sends, verifies its Ed25519
 //! signature against the enrolled gate key, and answers `consume` the way
@@ -132,6 +132,7 @@ fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }
 
+/// serial is the certificate serial; the capability id is serial - 1.
 fn cert_auth_info(ca: &SigningKey, principal: &str, serial: u64, after: u64, before: u64) -> String {
     let spec = ssh::UserCertSpec {
         nonce: [4; 32],
@@ -192,17 +193,17 @@ fn inv(cmd: &str, info: &str) -> Invocation {
 #[test]
 fn hero_sequence_at_the_gate() {
     let (gate, ca, calls) = setup(None);
-    let info = cert_auth_info(&ca, "sbc-prod-web-02", 12, now() - 60, now() + 600);
+    let info = cert_auth_info(&ca, "sbc-prod-web-02", 13, now() - 60, now() + 600);
 
-    // ✓ the approved action runs (dry-run backend prints the fixed argv)
+    // âœ“ the approved action runs (dry-run backend prints the fixed argv)
     assert_eq!(gate.run(&inv("sudo systemctl restart checkout-api", &info)), 0);
-    // ✕ never parses into an action: reported on-chain with only program + hash
+    // âœ• never parses into an action: reported on-chain with only program + hash
     assert_eq!(gate.run(&inv("sudo cat /etc/shadow", &info)), EXIT_NOT_AUTHORISABLE);
-    // ✕ parses, but the contract says out of scope
+    // âœ• parses, but the contract says out of scope
     assert_eq!(gate.run(&inv("sudo systemctl restart sshd", &info)), EXIT_DENIED);
-    // ✕ single use already consumed
+    // âœ• single use already consumed
     assert_eq!(gate.run(&inv("sudo systemctl restart checkout-api", &info)), EXIT_DENIED);
-    // ✕ injection attempt never reaches the chain or a shell
+    // âœ• injection attempt never reaches the chain or a shell
     assert_eq!(gate.run(&inv("sudo systemctl restart checkout-api; id", &info)), EXIT_NOT_AUTHORISABLE);
 
     let c = calls.lock().unwrap();
@@ -222,11 +223,11 @@ fn hero_sequence_at_the_gate() {
 #[test]
 fn certificates_are_checked_independently_of_sshd() {
     let (gate, ca, calls) = setup(None);
-    let expired = cert_auth_info(&ca, "sbc-prod-web-02", 12, now() - 700, now() - 100);
+    let expired = cert_auth_info(&ca, "sbc-prod-web-02", 13, now() - 700, now() - 100);
     assert_eq!(gate.run(&inv("sudo systemctl restart checkout-api", &expired)), EXIT_DENIED);
-    let other_host = cert_auth_info(&ca, "sbc-prod-web-03", 12, now() - 60, now() + 600);
+    let other_host = cert_auth_info(&ca, "sbc-prod-web-03", 13, now() - 60, now() + 600);
     assert_eq!(gate.run(&inv("sudo systemctl restart checkout-api", &other_host)), EXIT_DENIED);
-    let rogue = cert_auth_info(&SigningKey::from_bytes(&[1; 32]), "sbc-prod-web-02", 12, now() - 60, now() + 600);
+    let rogue = cert_auth_info(&SigningKey::from_bytes(&[1; 32]), "sbc-prod-web-02", 13, now() - 60, now() + 600);
     assert_eq!(gate.run(&inv("sudo systemctl restart checkout-api", &rogue)), EXIT_DENIED);
     assert_eq!(gate.run(&Invocation { original_command: "id".into(), auth_info: None }), EXIT_DENIED);
     let c = calls.lock().unwrap();
@@ -238,7 +239,7 @@ fn certificates_are_checked_independently_of_sshd() {
 #[test]
 fn host_local_ceiling_beats_the_contract() {
     let (gate, ca, calls) = setup(None);
-    let info = cert_auth_info(&ca, "sbc-prod-web-02", 12, now() - 60, now() + 600);
+    let info = cert_auth_info(&ca, "sbc-prod-web-02", 13, now() - 60, now() + 600);
     assert_eq!(gate.run(&inv("sudo systemctl restart payments-api", &info)), EXIT_DENIED);
     let c = calls.lock().unwrap();
     assert!(c.consume.is_empty());
@@ -255,6 +256,16 @@ fn unreachable_chain_fails_closed() {
         format!("http://127.0.0.1:{}", p)
     };
     let (gate, ca, _calls) = setup(Some(dead));
-    let info = cert_auth_info(&ca, "sbc-prod-web-02", 12, now() - 60, now() + 600);
+    let info = cert_auth_info(&ca, "sbc-prod-web-02", 13, now() - 60, now() + 600);
     assert_eq!(gate.run(&inv("sudo systemctl restart checkout-api", &info)), EXIT_UNAVAILABLE);
+}
+
+#[test]
+fn serial_zero_is_never_honoured() {
+    let (gate, ca, calls) = setup(None);
+    let info = cert_auth_info(&ca, "sbc-prod-web-02", 0, now() - 60, now() + 600);
+    assert_eq!(gate.run(&inv("sudo systemctl restart checkout-api", &info)), EXIT_DENIED);
+    let c = calls.lock().unwrap();
+    assert!(c.consume.is_empty());
+    assert_eq!(c.report_denial[0]["code"], "malformed_certificate");
 }

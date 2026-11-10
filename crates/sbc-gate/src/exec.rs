@@ -128,7 +128,11 @@ impl Gate {
                 Err(e) => return self.deny_local(inv, None, &session, e.code(), "presented certificate is not valid for this host"),
             },
         };
-        let serial = presented.serial;
+        // certificate serial = capability id + 1 (KRLs cannot revoke serial 0)
+        let serial = match presented.serial.checked_sub(1) {
+            Some(id) => id,
+            None => return self.deny_local(inv, None, &session, "malformed_certificate", "certificate serial 0 is never issued"),
+        };
 
         // 2. what is being asked, as a typed action?
         let parsed = match parse_command(&inv.original_command) {
