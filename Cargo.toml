@@ -6,7 +6,7 @@ members = ["crates/sbc-core", "crates/sbc-gate", "contracts/sbc-policy"]
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/sudo-by-contract/sudo-by-contract"
+repository = "https://github.com/BoyofMars/sudo-by-contract"
 
 [profile.release]
 codegen-units = 1
