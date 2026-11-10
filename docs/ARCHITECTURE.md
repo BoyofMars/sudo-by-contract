@@ -103,6 +103,15 @@ both. Keys cannot attach deposits and have gas allowances, which bounds abuse. H
 use WebCrypto Ed25519 keys generated **non-extractable** in the browser: no wallet, no
 seed phrase, nothing to copy out of the page.
 
+*Why not a wallet or a passkey?* A wallet makes every approval a crypto UX moment and
+puts a full-access key in the loop. A WebAuthn passkey cannot produce the raw Ed25519
+signature over a transaction hash that a NEAR access key needs (it signs
+`authenticatorData ‖ clientDataHash`, usually with P-256). The device key gives the
+property that matters — the secret cannot leave the device — with a one-tap UX. Gating
+each use of the device key behind a WebAuthn user-verification ceremony is a drop-in
+hardening step (roadmap). One-time enrollment links carry their token in the URL
+*fragment*, so it never reaches a server, and the token is burned on first use.
+
 ### 3. Enforcement is anchored on-chain per action
 
 The gate calls `consume(request_id, action)` before every execution. That single call is
