@@ -15,3 +15,6 @@ sandbox/state/
 *.sqlite-*
 # machine-specific preview config
 .claude/
+!apps/console/.env.production
+# Vercel local link/build output
+.vercel/

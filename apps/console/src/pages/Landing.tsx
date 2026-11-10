@@ -34,6 +34,9 @@ const CMP: { row: string; cells: string[] }[] = [
   { row: "Maturity", cells: ["Battle-tested", "Battle-tested", "Production-ready", "Early: SSH first; Kubernetes and cloud adapters next"] },
 ];
 
+/** Set at build time for hosted deployments (e.g. VITE_SBC_LIVE_CONTRACT=bagyard-sexton.testnet). */
+const LIVE_CONTRACT = (import.meta.env.VITE_SBC_LIVE_CONTRACT as string | undefined)?.trim() || null;
+
 const SNIPPETS: Record<string, string> = {
   CLI: `$ sudoctl request restart checkout-api --on prod-web-02 --for 10m \\
     --reason "checkout-api unresponsive after deploy #1842"
@@ -103,6 +106,11 @@ export function Landing() {
             <a className="btn btn-primary btn-lg" href="#/console">Open the console <Icon name="arrow" size={14} /></a>
             <button className="btn btn-secondary btn-lg" onClick={() => go("enforcement")}>See how it's enforced</button>
           </div>
+          {LIVE_CONTRACT ? (
+            <p className="muted small">
+              Live on NEAR testnet: <a href={`#/console?contract=${LIVE_CONTRACT}`} className="mono">{LIVE_CONTRACT}</a> (read-only view of the real contract and its audit trail)
+            </p>
+          ) : null}
           <ul className="hero-proof">
             <li>OpenSSH certificates</li>
             <li>Typed action adapters</li>
