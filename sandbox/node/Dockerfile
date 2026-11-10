@@ -12,5 +12,6 @@ COPY apps/demo-agent ./apps/demo-agent
 COPY apps/sudoctl ./apps/sudoctl
 COPY apps/sbc-mcp ./apps/sbc-mcp
 ENV NODE_NO_WARNINGS=1 SBC_HOME=/state
+RUN mkdir -p /state && chown node:node /state
 VOLUME ["/state"]
 USER node
