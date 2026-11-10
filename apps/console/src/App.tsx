@@ -10,11 +10,15 @@ import { Join } from "./pages/Join.tsx";
 import { Shell } from "./pages/Shell.tsx";
 
 export function App() {
+  const route = useRoute();
+  // Re-resolve when a link switches contract or preview within an open page
+  // (hash-only navigation does not reload the app).
+  const urlContract = route.query.get("contract");
+  const urlPreview = route.query.get("preview");
   const source = useMemo(() => {
     const cfg = resolveConfig();
     return cfg.contractId ? new LiveSource(cfg.contractId, cfg.rpcUrl, cfg.relayUrl) : new PreviewSource();
-  }, []);
-  const route = useRoute();
+  }, [urlContract, urlPreview]);
 
   let page;
   if (route.path === "/" || route.path === "") page = <Landing />;
