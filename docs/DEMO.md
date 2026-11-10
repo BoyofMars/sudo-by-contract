@@ -1,0 +1,103 @@
+# The demo
+
+> *"Production checkout is unhealthy. I need permission to restart `checkout-api` on
+> `prod-web-02`."*
+
+| Step | What happens | Where it is enforced |
+|---|---|---|
+| Request | Deploy Agent probes `checkout-api` (error rate 1.2% → 18% after deploy #1842), generates a fresh SSH key, posts its evidence privately to the relay, and calls `request_access(prod-web-02, service.restart:checkout-api, 10m, 1 use)` with the evidence hash. | Contract: policy `prod-remediation` matches; 1 approval required. |
+| Review | The console shows WHO / WHY (rationale ✓ matches on-chain hash) / WHAT (`sudo systemctl restart checkout-api`) / WHERE / WINDOW / USES / POLICY / RISK and the policy evaluation (✓ identity, ✓ environment, ✓ action, ✓ target, ✓ 10m ≤ 15m, ○ approval). | — |
+| Approve | One tap on **Approve 10 min** (a non-extractable device key signs `approve`). | Contract builds the certificate body; NEAR MPC signs it; contract verifies and issues. |
+| Execute | `sudo systemctl restart checkout-api` → **✓ allowed**, service recovers. | sshd (CA, principal, window) → sbc-gate (grammar, host ceiling) → `consume` (scope, uses) → exact sudoers line. |
+| Escalate | `sudo cat /etc/shadow` → **✕ denied** (no adapter: not an action anyone can authorise). | sbc-gate grammar; denial recorded on-chain with program + hash. |
+| Escalate | `sudo systemctl restart sshd` → **✕ denied** (capability permits only `service.restart:checkout-api`). | `consume` on-chain. |
+| Repeat | `sudo systemctl restart checkout-api` → **✕ denied** (single use consumed), though the window is still open. | `consume` on-chain. |
+| Expire | A 60-second status capability works once, then after expiry → **✕ Permission denied (publickey)**. | **sshd itself** rejects the expired certificate; the gate and contract would also refuse. |
+
+None of the denials come from a UI. They come from OpenSSH, the gate binary and the
+contract, and every one of them is in the audit trail.
+
+## Option A — Docker sandbox (real sshd, real testnet, real MPC)
+
+Prerequisites: Docker, Node ≥ 24, Rust + `cargo-near`, `near` CLI (near-cli-rs) with a
+funded testnet account in the legacy keychain.
+
+```bash
+# 1. a contract account you control (≈ 8 NEAR covers code + storage on testnet)
+near account create-account fund-myself sbc.<you>.testnet '8 NEAR' autogenerate-new-keypair save-to-legacy-keychain sign-as <you>.testnet network-config testnet sign-with-legacy-keychain send
+```
+
+```bash
+# 2. build the contract
+cd contracts/sbc-policy && cargo near build non-reproducible-wasm --no-abi && cd ../..
+```
+
+```bash
+# 3. deploy + configure: environment (MPC-derived CA), agent, resource, policies, one-time tokens
+node scripts/bootstrap-testnet.ts --owner <you>.testnet --contract sbc.<you>.testnet --deploy
+```
+
+```bash
+# 4. demo server enrolls itself with its one-time token; relay + console come up
+docker compose -f sandbox/docker-compose.yml up --build -d
+```
+
+Open the join link printed by step 3 once (binds your browser as admin), then:
+
+```bash
+# 5. the hero demo, narrated by the agent; approve it in the console when asked
+docker compose -f sandbox/docker-compose.yml run --rm agent
+```
+
+Inspect enforcement from the host side:
+
+```bash
+docker compose -f sandbox/docker-compose.yml exec demo-server cat /etc/ssh/sshd_config.d/50-sbc.conf /etc/sudoers.d/sbc-gate
+```
+
+## Option B — Live verification without Docker
+
+`scripts/e2e-testnet.ts` runs everything except sshd against testnet: enrollment with a
+one-time token, policy evaluation, human approval, MPC signing, `ssh-keygen`
+verification of the MPC-signed certificate, the real `sbc-gate` binary (dry-run backend)
+calling `consume` for allowed/denied commands, revocation → KRL, and expiry.
+
+```bash
+cargo build -p sbc-gate
+```
+
+```bash
+node scripts/e2e-testnet.ts --owner <you>.testnet --contract sbc.<you>.testnet
+```
+
+## Option C — A real server
+
+On any Linux host with OpenSSH ≥ 8.2 and systemd:
+
+```bash
+sudo useradd --create-home --shell /bin/sh sbc-agent && sudo usermod -p '*' sbc-agent
+```
+
+```bash
+sudo install -m 0755 sbc-gate /usr/local/sbin/sbc-gate
+```
+
+```bash
+sudo sbc-gate enroll --contract sbc.<you>.testnet --resource prod-web-02 --token <one-time token from `sudoctl admin token --role gate` or the console>
+```
+
+Enrollment writes only `/etc/sbc/*` and `/etc/ssh/sbc_*`, and **prints** the sshd drop-in
+and the exact sudoers rules for review. Re-run with `--write-sshd --write-sudoers` to
+install them (`visudo -c` is checked first), validate with `sshd -t`, reload sshd, and put
+`sbc-gate sync` on a one-minute timer.
+
+## Option D — Give an AI agent the capability tools
+
+```bash
+claude mcp add sudo-by-contract -- node apps/sbc-mcp/src/main.ts
+```
+
+Set `SBC_CONTRACT`, `SBC_AGENT_KEY_FILE` and `SBC_HOSTS` in its environment (see
+[apps/sbc-mcp/README.md](../apps/sbc-mcp/README.md)). The agent gets `request_capability`,
+`wait_for_capability`, `run_approved_action` and `release_capability`, and never a
+reusable credential.
