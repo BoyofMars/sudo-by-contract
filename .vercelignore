@@ -1,0 +1,16 @@
+# Only the console and the shared client are needed to build the site.
+# Never upload local secrets (sandbox/.env holds enrollment tokens and the demo agent key).
+.env
+.env.*
+!apps/console/.env.production
+sandbox/
+target/
+node_modules/
+.claude/
+crates/
+contracts/
+scripts/
+apps/sudoctl/
+apps/relay/
+apps/demo-agent/
+apps/sbc-mcp/
