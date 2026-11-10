@@ -203,7 +203,8 @@ fn hero_flow_request_approve_issue_execute_deny_expire() {
     let r = w.c.get_request(id).unwrap();
     assert_eq!(r.state, RequestState::Active);
     let (_, cert) = ssh::parse_cert_line(r.certificate.as_ref().unwrap()).unwrap();
-    assert_eq!(cert.serial, id);
+    assert_eq!(cert.serial, serial_for(id));
+    assert_ne!(cert.serial, 0, "OpenSSH KRLs cannot revoke serial 0");
     assert_eq!(cert.principals, vec!["sbc-prod-web-02".to_string()]);
     assert_eq!(cert.critical_option("force-command"), Some("/usr/local/sbin/sbc-gate"));
     assert!(cert.extensions.is_empty(), "no pty / forwarding");
@@ -294,7 +295,7 @@ fn revocation_is_immediate_and_feeds_krl() {
     assert_eq!(d.code, "revoked");
     let rev = w.c.list_revocations("prod-web-02".into(), None);
     assert_eq!(rev.len(), 1);
-    assert_eq!(rev[0].serial, id);
+    assert_eq!(rev[0].serial, serial_for(id));
     assert!(w.c.list_revocations("prod-web-03".into(), None).is_empty());
 }
 

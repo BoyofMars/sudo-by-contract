@@ -38,6 +38,14 @@ const MAX_EVENTS_PER_REQUEST: usize = 48;
 const MAX_LIST: u32 = 100;
 const CA_PATH_PREFIX: &str = "sbc/ssh-user-ca";
 
+/// Certificate serial = capability id + 1. OpenSSH KRLs cannot revoke serial
+/// 0 (`ssh-keygen -k` rejects it), so capability #0 must not get serial 0.
+pub const SERIAL_OFFSET: u64 = 1;
+
+pub fn serial_for(request_id: u64) -> u64 {
+    request_id + SERIAL_OFFSET
+}
+
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct SudoByContract {
@@ -971,7 +979,7 @@ impl SudoByContract {
         r.revoked_by = Some(who.to_string());
         r.state_reason = Some(if reason.is_empty() { "revoked".into() } else { reason.clone() });
         if was_issued {
-            self.revocations.push(Revocation { serial: r.id, resource_id: r.resource_id.clone(), at_ms: now_ms(), valid_before: r.valid_before });
+            self.revocations.push(Revocation { serial: serial_for(r.id), resource_id: r.resource_id.clone(), at_ms: now_ms(), valid_before: r.valid_before });
         }
         let agent_id = r.agent_id.clone();
         self.event(r, "authorization_revoked", who, reason);
@@ -990,7 +998,7 @@ impl SudoByContract {
         r.state = RequestState::Cancelled;
         r.state_reason = Some("released by agent".into());
         if was_issued {
-            self.revocations.push(Revocation { serial: r.id, resource_id: r.resource_id.clone(), at_ms: now_ms(), valid_before: r.valid_before });
+            self.revocations.push(Revocation { serial: serial_for(r.id), resource_id: r.resource_id.clone(), at_ms: now_ms(), valid_before: r.valid_before });
         }
         let agent_id = r.agent_id.clone();
         self.event(&mut r, "authorization_released", &agent_id, "agent released the capability".into());
@@ -1018,7 +1026,7 @@ impl SudoByContract {
         let spec = ssh::UserCertSpec {
             nonce: env::sha256_array(&seed),
             subject_key: subject,
-            serial: id,
+            serial: serial_for(id),
             key_id: format!("sbc cap={} agent={} res={}", id, r.agent_id, r.resource_id),
             principals: vec![resource.principal.clone()],
             valid_after: r.valid_after,
@@ -1088,7 +1096,7 @@ impl SudoByContract {
         let ok = failure.is_none();
         match failure {
             None => {
-                let d = format!("certificate serial {} valid until {}", r.id, r.valid_before);
+                let d = format!("certificate serial {} valid until {}", serial_for(r.id), r.valid_before);
                 self.event(&mut r, "credential_issued", "mpc", d);
             }
             Some(f) => {
