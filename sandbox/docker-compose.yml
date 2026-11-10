@@ -23,7 +23,7 @@ services:
       SBC_DB: /data/relay.sqlite
       SBC_CONSOLE_URL: ${SBC_CONSOLE_URL:-http://localhost:5180}
       SBC_WEBHOOK_URL: ${SBC_WEBHOOK_URL:-}
-      SBC_CORS_ORIGIN: ${SBC_CONSOLE_URL:-http://localhost:5180}
+      SBC_CORS_ORIGINS: ${SBC_CONSOLE_URL:-http://localhost:5180}
     volumes: [relay-data:/data]
     ports: ["8787:8787"]
 
