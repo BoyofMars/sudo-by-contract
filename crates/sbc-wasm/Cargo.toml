@@ -1,0 +1,12 @@
+[package]
+name = "sbc-wasm"
+description = "sbc-core's command grammar, argv planner and redaction compiled to WebAssembly for the browser playground."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+sbc-core = { path = "../sbc-core" }
