@@ -14,3 +14,4 @@ apps/sudoctl/
 apps/relay/
 apps/demo-agent/
 apps/sbc-mcp/
+apps/console/dist/
