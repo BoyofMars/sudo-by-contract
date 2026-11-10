@@ -24,7 +24,7 @@ sequenceDiagram
     A->>C: request_access(resource, action, 10m, key, reason, context_hash)
     C->>C: evaluate deny/allow policies → checks[] (identity, resource, action, target, duration, uses, schedule, approval)
     H->>C: approve(request_id)   (signed by a non-extractable WebCrypto device key)
-    C->>C: build OpenSSH certificate body (TBS): serial = request id,<br/>principal sbc-<resource>, valid now-60s…now+10m,<br/>force-command sbc-gate, no extensions
+    C->>C: build OpenSSH certificate body (TBS): serial = request id + 1,<br/>principal sbc-<resource>, valid now-60s…now+10m,<br/>force-command sbc-gate, no extensions
     C->>M: sign({payload_v2: {Eddsa: TBS}, path: sbc/ssh-user-ca/v1/production, domain_id: 1})
     M-->>C: Ed25519 signature (threshold, inside TEEs)
     C->>C: ed25519_verify(sig, TBS, environment CA key) → certificate → Active
@@ -141,7 +141,7 @@ shell access:
 | sshd | `TrustedUserCAKeys` = environment CA (MPC-derived) | any key not certified by policy |
 | sshd | `AuthorizedPrincipalsFile` → only `sbc-<resource>` | certificates for other hosts |
 | sshd | certificate validity window | use after expiry |
-| sshd | `RevokedKeys` KRL (serials synced from `list_revocations`) | revoked certificates, even at login |
+| sshd | `RevokedKeys` KRL (serials synced from `list_revocations`; serial = capability id + 1 because KRLs cannot revoke serial 0) | revoked certificates, even at login |
 | sshd | `ForceCommand sbc-gate` (and the certificate's own `force-command`) | arbitrary commands, shells |
 | sshd | no PTY/forwarding: `PermitTTY no`, `AllowTcpForwarding no`, …; certificate carries **no** extensions | tunnels, agent forwarding, interactive sessions |
 | gate | independent certificate verification from `SSH_USER_AUTH` | misconfigured sshd |
