@@ -162,6 +162,24 @@ impl<'a> Reader<'a> {
     }
 }
 
+pub fn b64(bytes: &[u8]) -> String {
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+pub fn unb64(s: &str) -> Result<Vec<u8>, CertError> {
+    base64::engine::general_purpose::STANDARD.decode(s).map_err(|_| CertError::Base64)
+}
+
+/// Accept either an `ssh-ed25519 AAAA...` line or base64 of the raw 32 bytes.
+pub fn parse_ed25519_key_any(s: &str) -> Result<[u8; 32], CertError> {
+    let s = s.trim();
+    if s.starts_with(KEY_TYPE_ED25519) {
+        return parse_ed25519_pubkey_line(s);
+    }
+    let raw = unb64(s)?;
+    raw.as_slice().try_into().map_err(|_| CertError::BadLength("ed25519 public key"))
+}
+
 /// `string "ssh-ed25519" || string pk` — the public key blob.
 pub fn ed25519_key_blob(pk: &[u8; 32]) -> Vec<u8> {
     let mut w = Writer::new();
