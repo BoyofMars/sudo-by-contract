@@ -39,6 +39,7 @@ export class SudoContract {
   policies() { return this.view<T.Policy[]>("list_policies", {}); }
   policy(id: string, version?: number) { return this.view<T.Policy | null>("get_policy", { id, version: version ?? null }); }
   describePolicy(id: string) { return this.view<string | null>("describe_policy", { id }); }
+  policyProposals() { return this.view<T.PolicyProposal[]>("list_policy_proposals", {}); }
   request(id: number) { return this.view<T.AccessRequest | null>("get_request", { id }); }
   requests(q: { before_id?: number; limit?: number; agent_id?: string; resource_id?: string; states?: T.RequestState[] } = {}) {
     return this.view<T.AccessRequest[]>("list_requests", {
@@ -84,7 +85,10 @@ export class SudoContract {
     return this.call(admin, "create_enrollment", { role, principal, token_public_key: tokenPublicKey, ttl_secs: ttlSecs }, 30n * TGAS);
   }
   removeKey(admin: Signer, publicKey: string) { return this.call(admin, "remove_key", { public_key: publicKey }, 30n * TGAS); }
+  /** Returns the new version, or 0 when the change became a proposal awaiting the admin quorum. */
   upsertPolicy(admin: Signer, policy: T.PolicyInput) { return this.call<number>(admin, "upsert_policy", { policy }); }
+  /** Returns the applied version once the quorum is met, else 0. */
+  confirmPolicy(admin: Signer, proposalId: number) { return this.call<number>(admin, "confirm_policy", { proposal_id: proposalId }); }
   setPolicyStatus(admin: Signer, id: string, status: T.Status) { return this.call(admin, "set_policy_status", { id, status }); }
 
   // ------------------------------------------------------------ enrollment

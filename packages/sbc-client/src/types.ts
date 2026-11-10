@@ -203,6 +203,17 @@ export interface Config {
   allowance_enrollment: string;
   sign_gas_tgas: number;
   callback_gas_tgas: number;
+  /** Distinct admins required for a policy change (1 = any admin alone). */
+  policy_quorum: number;
+}
+
+export interface PolicyProposal {
+  id: number;
+  policy: PolicyInput;
+  proposer: string;
+  approvals: string[];
+  created_at_ms: number;
+  expires_at_ms: number;
 }
 
 export interface Overview {

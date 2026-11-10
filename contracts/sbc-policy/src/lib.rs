@@ -55,7 +55,11 @@ pub struct SudoByContract {
     agent_rate: LookupMap<String, (u64, u32)>,
     audit_seq: u64,
     audit_head: [u8; 32],
+    policy_proposals: IterableMap<u64, PolicyProposal>,
+    next_proposal_id: u64,
 }
+
+const PROPOSAL_TTL_MS: u64 = 24 * 3600 * 1000;
 
 #[near(serializers = [json])]
 #[derive(Clone, Debug)]
@@ -123,6 +127,7 @@ impl SudoByContract {
                 allowance_enrollment: U128(NearToken::from_millinear(250).as_yoctonear()),
                 sign_gas_tgas: 50,
                 callback_gas_tgas: 25,
+                policy_quorum: 1,
             },
             keys: LookupMap::new(b"k"),
             agents: IterableMap::new(b"a"),
@@ -137,6 +142,8 @@ impl SudoByContract {
             agent_rate: LookupMap::new(b"t"),
             audit_seq: 0,
             audit_head: [0u8; 32],
+            policy_proposals: IterableMap::new(b"x"),
+            next_proposal_id: 0,
         }
     }
 
@@ -314,8 +321,13 @@ impl SudoByContract {
         sign_gas_tgas: Option<u64>,
         callback_gas_tgas: Option<u64>,
         force_command: Option<String>,
+        policy_quorum: Option<u8>,
     ) {
         require!(self.is_owner_call(), "owner only");
+        if let Some(q) = policy_quorum {
+            require!((1..=5).contains(&q), "policy quorum must be 1-5");
+            self.config.policy_quorum = q;
+        }
         if let Some(v) = approval_ttl_secs {
             require!((60..=86_400).contains(&v), "approval ttl out of range");
             self.config.approval_ttl_secs = v;
@@ -594,9 +606,8 @@ impl SudoByContract {
 
     // ============================================================ policies
 
-    pub fn upsert_policy(&mut self, policy: PolicyInput) -> u32 {
-        let actor = self.require_admin();
-        if let Err(e) = policy::validate_policy(&policy, self.config.max_duration_secs) {
+    fn check_policy_input(&self, policy: &PolicyInput) {
+        if let Err(e) = policy::validate_policy(policy, self.config.max_duration_secs) {
             env::panic_str(&e);
         }
         for a in &policy.subjects.agents {
@@ -605,6 +616,70 @@ impl SudoByContract {
         for a in &policy.approval.approvers {
             require!(self.approvers.get(a).is_some(), format!("unknown approver {}", a));
         }
+    }
+
+    /// Create or update a policy. With `policy_quorum > 1` this records a
+    /// proposal (returns 0) that other admins `confirm_policy`; nothing changes
+    /// until the quorum is met.
+    pub fn upsert_policy(&mut self, policy: PolicyInput) -> u32 {
+        let actor = self.require_admin();
+        self.check_policy_input(&policy);
+        if self.config.policy_quorum <= 1 {
+            return self.apply_policy(policy, actor);
+        }
+        let id = self.next_proposal_id;
+        self.next_proposal_id += 1;
+        let now = now_ms();
+        let summary = policy::describe(&Policy {
+            id: policy.id.clone(),
+            version: 0,
+            name: policy.name.clone(),
+            description: String::new(),
+            effect: policy.effect,
+            subjects: policy.subjects.clone(),
+            resources: policy.resources.clone(),
+            actions: policy.actions.clone(),
+            max_duration_secs: policy.max_duration_secs,
+            max_uses: policy.max_uses,
+            approval: policy.approval.clone(),
+            conditions: policy.conditions.clone(),
+            status: Status::Active,
+            updated_at_ms: now,
+            updated_by: actor.clone(),
+            hash: String::new(),
+        });
+        self.audit("policy_proposed", &actor, json!({ "proposal_id": id, "policy_id": policy.id, "summary": summary, "quorum": self.config.policy_quorum }));
+        self.policy_proposals.insert(
+            id,
+            PolicyProposal { id, policy, proposer: actor.clone(), approvals: vec![actor], created_at_ms: now, expires_at_ms: now + PROPOSAL_TTL_MS },
+        );
+        0
+    }
+
+    /// A second (third, …) admin agrees to a pending policy change. Returns
+    /// the new policy version once the quorum is met, else 0.
+    pub fn confirm_policy(&mut self, proposal_id: u64) -> u32 {
+        let actor = self.require_admin();
+        let mut p = self.policy_proposals.get(&proposal_id).cloned().unwrap_or_else(|| env::panic_str("unknown proposal"));
+        if now_ms() > p.expires_at_ms {
+            self.policy_proposals.remove(&proposal_id);
+            self.audit("policy_proposal_expired", &actor, json!({ "proposal_id": proposal_id }));
+            return 0;
+        }
+        require!(!p.approvals.contains(&actor), "you already approved this change");
+        p.approvals.push(actor.clone());
+        self.audit("policy_confirmed", &actor, json!({ "proposal_id": proposal_id, "approvals": p.approvals.len(), "quorum": self.config.policy_quorum }));
+        if (p.approvals.len() as u8) < self.config.policy_quorum {
+            self.policy_proposals.insert(proposal_id, p);
+            return 0;
+        }
+        self.policy_proposals.remove(&proposal_id);
+        self.check_policy_input(&p.policy);
+        let by = p.approvals.join("+");
+        self.apply_policy(p.policy, by)
+    }
+
+    fn apply_policy(&mut self, policy: PolicyInput, actor: String) -> u32 {
         let version = self.policies.get(&policy.id).map(|p| p.version + 1).unwrap_or(1);
         let mut p = Policy {
             id: policy.id.clone(),
@@ -632,8 +707,14 @@ impl SudoByContract {
         version
     }
 
+    /// Disabling is always immediate (it only removes authority). Re-enabling
+    /// widens authority, so under a quorum it must go through `upsert_policy`.
     pub fn set_policy_status(&mut self, id: String, status: Status) {
         let actor = self.require_admin();
+        require!(
+            status != Status::Active || self.config.policy_quorum <= 1,
+            "re-enabling a policy needs the admin quorum: submit it with upsert_policy"
+        );
         let p = self.policies.get_mut(&id).unwrap_or_else(|| env::panic_str("policy not found"));
         p.status = status;
         self.audit("policy_status", &actor, json!({ "policy_id": id, "status": status }));
@@ -1198,6 +1279,10 @@ impl SudoByContract {
             Some(v) => self.policy_history.get(&format!("{}@{}", id, v)).cloned(),
             None => self.policies.get(&id).cloned(),
         }
+    }
+
+    pub fn list_policy_proposals(&self) -> Vec<PolicyProposal> {
+        self.policy_proposals.values().take(MAX_LIST as usize).cloned().collect()
     }
 
     pub fn describe_policy(&self, id: String) -> Option<String> {

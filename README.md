@@ -27,7 +27,7 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 |---|---|
 | The NEAR MPC network can act as an OpenSSH CA | Read the MPC contract source (`sign` with `payload_v2.Eddsa`, ≤ 1232 bytes; standard Ed25519 verification against the derived key) and queried the live testnet signer: domain 1 = Frost/Ed25519, threshold 11. |
 | Our certificates are real OpenSSH certificates | `ssh-keygen -L` accepts certificates built by `sbc-core` (the code the contract runs); a single flipped bit is rejected with `incorrect signature`; re-encoding an `ssh-keygen -s` certificate reproduces its signed bytes exactly (`crates/sbc-core/examples/interop.rs`). |
-| Policy, approvals, signing, consume, expiry, revocation, host binding | 24 contract tests with a simulated MPC callback carrying real Ed25519 signatures (`contracts/sbc-policy/src/tests.rs`). |
+| Policy, approvals, signing, consume, expiry, revocation, host binding, admin quorum | 27 contract tests with a simulated MPC callback carrying real Ed25519 signatures (`contracts/sbc-policy/src/tests.rs`). |
 | The gate enforces it | 8 unit + 4 end-to-end gate tests against a mock NEAR RPC that verifies every transaction signature: hero sequence, independent certificate checks, host ceiling, fail-closed (`crates/sbc-gate/tests/exec_flow.rs`). |
 | Revocation reaches sshd | KRL produced from revoked serials makes `ssh-keygen -Q` report `REVOKED`. |
 | No wallet needed | Hand-written borsh transactions match `@near-js/transactions` byte-for-byte; WebCrypto Ed25519 signing in browser and Node. |

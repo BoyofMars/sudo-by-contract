@@ -77,7 +77,8 @@ Where we are weaker, honestly:
 
 ## Roadmap
 
-1. **Admin quorum + timelock** on policy and contract changes; lock the contract account.
+1. **Timelock** on policy changes (the k-of-n admin quorum ships today, `policy_quorum`);
+   lock the contract account or govern upgrades by multisig.
 2. **Target commitments** so service names never appear on-chain (gate compares hashes).
 3. **Kubernetes adapter** (`k8s.rollout_restart:<ns>/<deploy>`) via a validating admission
    webhook / exec proxy that calls `consume`.

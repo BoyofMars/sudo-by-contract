@@ -24,7 +24,7 @@ impl Role {
     /// Methods the NEAR protocol will let a key of this role call.
     pub fn method_names(&self) -> &'static str {
         match self {
-            Role::Admin => "upsert_policy,set_policy_status,create_resource,update_resource,set_resource_status,create_agent,set_agent_status,create_approver,set_approver_status,create_enrollment,remove_key,add_environment,approve,deny,revoke",
+            Role::Admin => "upsert_policy,confirm_policy,set_policy_status,create_resource,update_resource,set_resource_status,create_agent,set_agent_status,create_approver,set_approver_status,create_enrollment,remove_key,add_environment,approve,deny,revoke",
             Role::Approver => "approve,deny,revoke",
             Role::Agent => "request_access,cancel_request",
             Role::Gate => "consume,report_denial,heartbeat",
@@ -200,7 +200,7 @@ pub struct Policy {
 }
 
 /// What an admin submits; versioning and hashing are done by the contract.
-#[near(serializers = [json])]
+#[near(serializers = [borsh, json])]
 #[derive(Clone, Debug)]
 pub struct PolicyInput {
     pub id: String,
@@ -389,6 +389,21 @@ pub struct Config {
     pub allowance_enrollment: U128,
     pub sign_gas_tgas: u64,
     pub callback_gas_tgas: u64,
+    /// Distinct admins that must agree before a policy change takes effect.
+    /// 1 = any admin alone (default); >1 turns `upsert_policy` into a proposal.
+    pub policy_quorum: u8,
+}
+
+/// A policy change waiting for `policy_quorum` distinct admins.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
+pub struct PolicyProposal {
+    pub id: u64,
+    pub policy: PolicyInput,
+    pub proposer: String,
+    pub approvals: Vec<String>,
+    pub created_at_ms: u64,
+    pub expires_at_ms: u64,
 }
 
 #[near(serializers = [json])]

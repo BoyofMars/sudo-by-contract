@@ -84,7 +84,9 @@ contract account* (they are function-call keys on it); the owner signs as itself
 | `add_environment(name)` | Admin / owner | asks the MPC contract for `derived_public_key` |
 | `create_agent / create_approver / create_resource / update_resource` | Admin / owner | |
 | `set_agent_status / set_approver_status / set_resource_status` | Admin / owner | resource `Disabled` = kill switch |
-| `upsert_policy(policy) / set_policy_status(id, status)` | Admin / owner | versioned + hashed |
+| `upsert_policy(policy) / set_policy_status(id, status)` | Admin / owner | versioned + hashed; with `policy_quorum > 1`, `upsert_policy` returns 0 and records a proposal |
+| `confirm_policy(proposal_id)` | Admin / owner | another distinct admin agrees; applies once the quorum is met |
+| `list_policy_proposals()` (view) | anyone | pending policy changes |
 | `create_enrollment(role, principal, token_public_key, ttl_secs?)` | Admin / owner | adds a one-shot key allowed only `complete_enrollment` |
 | `complete_enrollment(new_public_key, meta?)` | Enrollment token | binds the new key with its role's method list; deletes the token |
 | `remove_key(public_key)` | Admin / owner | |
@@ -98,7 +100,8 @@ Kinds: `request_created`, `policy_evaluated`, `approval_granted`, `approval_deni
 `approval_expired`, `credential_signing`, `credential_issued`, `credential_failed`,
 `credential_discarded`, `command_allowed`, `command_denied`, `authorization_used`,
 `authorization_expired`, `authorization_revoked`, `authorization_released`,
-`policy_updated`, `policy_status`, `resource_created`, `resource_updated`,
+`policy_updated`, `policy_proposed`, `policy_confirmed`, `policy_proposal_expired`,
+`policy_status`, `resource_created`, `resource_updated`,
 `resource_status`, `agent_created`, `agent_status`, `approver_created`,
 `approver_status`, `enrollment_created`, `enrollment_completed`, `enrollment_expired`,
 `key_removed`, `environment_created`, `environment_ca_ready`, `environment_ca_failed`,

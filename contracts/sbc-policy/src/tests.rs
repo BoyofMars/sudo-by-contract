@@ -536,6 +536,62 @@ fn audit_chain_advances_and_policy_is_versioned() {
     );
 }
 
+fn with_quorum_of_two(w: &mut World) -> SigningKey {
+    w.as_owner();
+    w.c.create_approver("admin2".into(), "Second admin".into(), true);
+    let admin2 = key(11);
+    w.enroll(Role::Admin, "admin2", &key(7), &admin2);
+    w.as_owner();
+    w.c.set_config(None, None, None, None, None, None, Some(2));
+    admin2
+}
+
+#[test]
+fn policy_changes_need_the_admin_quorum() {
+    let mut w = world();
+    let admin2 = with_quorum_of_two(&mut w);
+    // a single admin widening the policy only creates a proposal
+    w.as_key(&admin_dev());
+    let v = w.c.upsert_policy(policy_input("prod-remediation", "service.restart", &["checkout-api", "payments-api", "sshd"], 3600, 5, 0));
+    assert_eq!(v, 0);
+    let p = w.c.get_policy("prod-remediation".into(), None).unwrap();
+    assert_eq!((p.version, p.max_duration_secs, p.approval.required), (1, 900, 1), "nothing changed yet");
+    let props = w.c.list_policy_proposals();
+    assert_eq!(props.len(), 1);
+    // the second admin agrees → applied
+    w.as_key(&admin2);
+    let v = w.c.confirm_policy(props[0].id);
+    assert_eq!(v, 2);
+    let p = w.c.get_policy("prod-remediation".into(), None).unwrap();
+    assert_eq!((p.max_duration_secs, p.approval.required), (3600, 0));
+    assert_eq!(p.updated_by, "success+admin2");
+    assert!(w.c.list_policy_proposals().is_empty());
+}
+
+#[test]
+#[should_panic(expected = "you already approved this change")]
+fn proposer_cannot_meet_the_quorum_alone() {
+    let mut w = world();
+    with_quorum_of_two(&mut w);
+    w.as_key(&admin_dev());
+    w.c.upsert_policy(policy_input("prod-remediation", "service.restart", &["*"], 3600, 5, 0));
+    let id = w.c.list_policy_proposals()[0].id;
+    w.c.confirm_policy(id);
+}
+
+#[test]
+fn under_quorum_disabling_is_immediate_but_reenabling_is_not() {
+    let mut w = world();
+    with_quorum_of_two(&mut w);
+    w.as_key(&admin_dev());
+    w.c.set_policy_status("prod-remediation".into(), Status::Suspended);
+    assert_eq!(w.c.get_policy("prod-remediation".into(), None).unwrap().status, Status::Suspended);
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        w.c.set_policy_status("prod-remediation".into(), Status::Active);
+    }));
+    assert!(r.is_err());
+}
+
 #[test]
 fn simulate_matches_request_evaluation() {
     let w = world();

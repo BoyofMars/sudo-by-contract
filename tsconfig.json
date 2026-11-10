@@ -21,6 +21,7 @@
     "apps/relay/test/**/*.ts",
     "apps/demo-agent/src/**/*.ts",
     "apps/sbc-mcp/src/**/*.ts",
-    "apps/sbc-mcp/test/**/*.ts"
+    "apps/sbc-mcp/test/**/*.ts",
+    "scripts/**/*.ts"
   ]
 }
