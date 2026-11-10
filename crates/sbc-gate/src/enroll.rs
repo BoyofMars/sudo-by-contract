@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub const AGENT_USER: &str = "sbc-agent";
+pub const SSHD_DROPIN: &str = "/etc/ssh/sshd_config.d/50-sbc.conf";
 
 pub struct EnrollOpts {
     pub contract: String,
@@ -212,7 +213,7 @@ pub fn enroll(o: EnrollOpts) -> Result<(), String> {
     let snippet = sshd_snippet(&cfg);
     let sudoers = adapters::render_sudoers(o.backend, AGENT_USER, &services);
     if o.write_sshd && !o.dry_run {
-        write_file(&o.ssh_dir.join("sshd_config.d").join("50-sbc.conf"), &snippet, 0o644, false)?;
+        write_file(Path::new(SSHD_DROPIN), &snippet, 0o644, false)?;
         println!("    validate with `sshd -t`, then reload sshd");
     } else {
         println!("\n  sshd configuration (review, then install as /etc/ssh/sshd_config.d/50-sbc.conf):\n");

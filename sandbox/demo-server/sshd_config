@@ -1,0 +1,18 @@
+# Sudo by Contract demo server — base sshd configuration.
+# Hardened defaults; the Sudo by Contract part lives in sshd_config.d/50-sbc.conf,
+# written by `sbc-gate enroll --write-sshd`.
+
+Port 22
+HostKey /etc/ssh/keys/ssh_host_ed25519_key
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+UsePAM no
+PrintMotd no
+# Do not let clients push environment variables into the forced command.
+PermitUserEnvironment no
+LogLevel VERBOSE
+Subsystem sftp none
+
+Include /etc/ssh/sshd_config.d/*.conf

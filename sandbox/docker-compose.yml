@@ -1,0 +1,71 @@
+# Sudo by Contract sandbox.
+#
+#   node scripts/bootstrap-testnet.mjs --owner <you>.testnet --contract sbc.<you>.testnet
+#   docker compose -f sandbox/docker-compose.yml up --build -d
+#   docker compose -f sandbox/docker-compose.yml run --rm agent
+#
+# The policy contract and the NEAR MPC signer are real (testnet). Nothing in
+# this stack holds an SSH CA key: demo-server trusts the CA public key the MPC
+# network derived for the contract.
+name: sudo-by-contract
+
+x-sbc: &sbc
+  SBC_CONTRACT: ${SBC_CONTRACT:?run scripts/bootstrap-testnet.mjs first}
+  SBC_RPC: ${SBC_RPC:-https://rpc.testnet.fastnear.com}
+
+services:
+  relay:
+    build: { context: .., dockerfile: sandbox/node/Dockerfile }
+    command: ["node", "apps/relay/src/main.ts"]
+    environment:
+      <<: *sbc
+      PORT: "8787"
+      SBC_DB: /data/relay.sqlite
+      SBC_CONSOLE_URL: ${SBC_CONSOLE_URL:-http://localhost:5180}
+      SBC_WEBHOOK_URL: ${SBC_WEBHOOK_URL:-}
+      SBC_CORS_ORIGIN: ${SBC_CONSOLE_URL:-http://localhost:5180}
+    volumes: [relay-data:/data]
+    ports: ["8787:8787"]
+
+  demo-server:
+    build: { context: .., dockerfile: sandbox/demo-server/Dockerfile }
+    hostname: prod-web-02
+    environment:
+      <<: *sbc
+      SBC_RESOURCE: ${SBC_RESOURCE:-prod-web-02}
+      SBC_ENROLL_TOKEN: ${SBC_ENROLL_TOKEN:-}
+      SBC_RELAY: http://relay:8787
+    volumes:
+      - server-sbc:/etc/sbc
+      - server-hostkeys:/etc/ssh/keys
+    ports: ["2222:22", "8080:8080"]
+    depends_on: [relay]
+
+  console:
+    build:
+      context: ..
+      dockerfile: sandbox/console/Dockerfile
+      args:
+        VITE_SBC_CONTRACT: ${SBC_CONTRACT}
+        VITE_SBC_RELAY: ${SBC_RELAY_PUBLIC:-http://localhost:8787}
+    ports: ["5180:80"]
+
+  # docker compose run --rm agent [--scenario restart|expiry]
+  agent:
+    build: { context: .., dockerfile: sandbox/node/Dockerfile }
+    entrypoint: ["node", "apps/demo-agent/src/main.ts"]
+    environment:
+      <<: *sbc
+      SBC_RELAY: http://relay:8787
+      SBC_AGENT_KEY: ${SBC_AGENT_KEY:-}
+      SBC_RESOURCE: ${SBC_RESOURCE:-prod-web-02}
+      SBC_HOST: sbc-agent@demo-server:22
+      SBC_HEALTH_URL: http://demo-server:8080/health
+      SBC_CONSOLE_URL: ${SBC_CONSOLE_URL:-http://localhost:5180}
+    depends_on: [demo-server, relay]
+    profiles: ["agent"]
+
+volumes:
+  relay-data:
+  server-sbc:
+  server-hostkeys:

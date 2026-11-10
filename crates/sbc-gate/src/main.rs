@@ -18,6 +18,7 @@ USAGE
   sbc-gate sync                 Heartbeat, refresh the revocation list (KRL), check CA pin
   sbc-gate check <command...>   Show how a command line maps to a typed action (no execution)
   sbc-gate sudoers              Print the exact sudoers rules for this host's services
+  sbc-gate sshd-config          Print the sshd drop-in for this host's configuration
   sbc-gate version
 
 ENVIRONMENT
@@ -69,6 +70,16 @@ fn main() {
                 }
             }
         }
+        Some("sshd-config") => match GateConfig::load(&config_path()) {
+            Ok(c) => {
+                print!("{}", enroll::sshd_snippet(&c));
+                0
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+                exec::EXIT_CONFIG
+            }
+        },
         Some("sudoers") => match GateConfig::load(&config_path()) {
             Ok(c) => {
                 print!("{}", adapters::render_sudoers(c.backend, enroll::AGENT_USER, &c.services));
