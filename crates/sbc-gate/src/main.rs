@@ -136,6 +136,8 @@ fn run_enroll(args: &[String]) -> i32 {
             backend: match flag(args, "--backend").as_deref() {
                 None | Some("systemd") => Backend::Systemd,
                 Some("supervisor") => Backend::Supervisor,
+                // executes nothing; prints the argv it would run (tests, e2e on non-Linux)
+                Some("dryrun") => Backend::DryRun,
                 Some(b) => return Err(format!("unknown backend {}", b)),
             },
             config_dir: PathBuf::from(flag(args, "--config-dir").unwrap_or_else(|| "/etc/sbc".into())),
