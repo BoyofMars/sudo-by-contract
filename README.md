@@ -15,6 +15,8 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 
 | | |
 |---|---|
+| **Live site** | [sudo-by-contract.vercel.app](https://sudo-by-contract.vercel.app) — landing + console (simulated preview); [live testnet view](https://sudo-by-contract.vercel.app/#/console?contract=bagyard-sexton.testnet) of the real contract, read-only |
+| **Tracks** | AI Security & Defense · Open Innovation |
 | **Contract** | [`bagyard-sexton.testnet`](https://testnet.nearblocks.io/address/bagyard-sexton.testnet) (NEAR testnet) |
 | **MPC signer** | [`v1.signer-prod.testnet`](https://testnet.nearblocks.io/address/v1.signer-prod.testnet) (Chain Signatures, Ed25519 domain) |
 | **Production SSH CA** | `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICA7lQ5yFKYgWPJFZuI9RVDrWMKp6z/qtIgOw2AHU2qR` — derived by the MPC network for the contract; no private key exists |
