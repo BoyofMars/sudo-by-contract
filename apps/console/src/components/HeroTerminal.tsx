@@ -25,7 +25,7 @@ const SCRIPT: Line[] = [
   { kind: "ok", text: "action", sub: "restart checkout-api", delay: 300 },
   { kind: "ok", text: "duration", sub: "requested 10m / allowed 15m", delay: 300 },
   { kind: "wait", text: "approval", sub: "waiting for 1 human…", delay: 380, phase: "approval" },
-  { kind: "ok", text: "approval", sub: "approved by success · from a phone", delay: 1700 },
+  { kind: "ok", text: "approval", sub: "approved by tobi · from a phone", delay: 1700 },
   { kind: "wait", text: "signing", sub: "NEAR MPC threshold signature (Ed25519)…", delay: 450, phase: "signing" },
   { kind: "ok", text: "certificate", sub: "serial 1042 · principal sbc-prod-web-02 · no pty", delay: 1500 },
   { kind: "banner", text: "AUTHORIZATION ACTIVE", sub: "10:00 · 1 use · this host only", delay: 450, phase: "active" },

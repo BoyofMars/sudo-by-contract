@@ -524,7 +524,7 @@ export const commands: Record<string, Command> = {
 
   "admin approver create": {
     summary: "Register a human approver (or admin)",
-    usage: 'sudoctl admin approver create <id> --label "Success" [--admin]',
+    usage: 'sudoctl admin approver create <id> --label "Tobi" [--admin]',
     async run(ctx) {
       const r = cfg(ctx);
       const id = ctx.args.pos(0, "id");

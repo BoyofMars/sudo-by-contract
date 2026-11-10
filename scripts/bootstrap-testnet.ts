@@ -36,8 +36,8 @@ const owner = opt("owner");
 const contractId = opt("contract");
 const network = opt("network", "testnet")!;
 const mpc = opt("mpc", "v1.signer-prod.testnet")!;
-const adminId = opt("admin", "success")!;
-const adminLabel = opt("admin-label", "Success")!;
+const adminId = opt("admin", "tobi")!;
+const adminLabel = opt("admin-label", "Tobi")!;
 const consoleUrl = opt("console", "http://localhost:5180")!;
 const rpcUrl = opt("rpc", "https://rpc.testnet.fastnear.com")!;
 if (!owner || !contractId) {

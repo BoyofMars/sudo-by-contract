@@ -143,12 +143,12 @@ fn world() -> World {
     assert!(w.c.on_ca_key("production".into(), Ok(ca_str)));
 
     w.as_owner();
-    w.c.create_approver("success".into(), "Success".into(), true);
+    w.c.create_approver("tobi".into(), "Tobi".into(), true);
     w.c.create_approver("oncall".into(), "On-call SRE".into(), false);
     w.c.create_agent("deploy-agent".into(), "Deploy Agent".into(), "platform-team".into(), "claude-opus-5-5".into());
     w.c.create_resource("prod-web-02".into(), "prod-web-02".into(), "production".into(), vec!["web".into()], vec!["checkout-api".into(), "payments-api".into(), "sshd".into()]);
     w.c.create_resource("prod-web-03".into(), "prod-web-03".into(), "production".into(), vec![], vec!["checkout-api".into()]);
-    w.enroll(Role::Admin, "success", &key(1), &admin_dev());
+    w.enroll(Role::Admin, "tobi", &key(1), &admin_dev());
     w.enroll(Role::Approver, "oncall", &key(2), &approver_dev());
     w.enroll(Role::Agent, "deploy-agent", &key(3), &agent_key());
     w.enroll(Role::Gate, "prod-web-02", &key(4), &gate_key());
@@ -428,7 +428,7 @@ fn revoked_while_signing_discards_signature() {
 #[test]
 fn approvers_can_only_narrow_and_multi_approval_counts() {
     let mut w = world();
-    w.enroll(Role::Approver, "success", &key(6), &approver2_dev());
+    w.enroll(Role::Approver, "tobi", &key(6), &approver2_dev());
     w.as_key(&admin_dev());
     w.c.upsert_policy(policy_input("prod-remediation", "service.restart", &["checkout-api"], 900, 1, 2));
     let id = request(&mut w, "service.restart:checkout-api", 600);
@@ -578,7 +578,7 @@ fn policy_changes_need_the_admin_quorum() {
     assert_eq!(v, 2);
     let p = w.c.get_policy("prod-remediation".into(), None).unwrap();
     assert_eq!((p.max_duration_secs, p.approval.required), (3600, 0));
-    assert_eq!(p.updated_by, "success+admin2");
+    assert_eq!(p.updated_by, "tobi+admin2");
     assert!(w.c.list_policy_proposals().is_empty());
 }
 

@@ -137,7 +137,7 @@ export class PreviewSource implements DataSource {
   private seq = 0;
   private revocations = 0;
   private listeners = new Set<(e: { type: "changed" }) => void>();
-  private identityBinding: KeyBinding = { role: "Admin", principal: "success", added_at_ms: Date.now() - 30 * 24 * HOUR, enrolls_as: null, expires_at_ms: null };
+  private identityBinding: KeyBinding = { role: "Admin", principal: "tobi", added_at_ms: Date.now() - 30 * 24 * HOUR, enrolls_as: null, expires_at_ms: null };
 
   constructor() {
     this.ready = this.seed();
@@ -172,7 +172,7 @@ export class PreviewSource implements DataSource {
 
     const key = async () => publicKeyToString((await generateKeyMaterial()).publicKey);
     const approvers: Approver[] = [
-      { id: "success", label: "Success", is_admin: true, keys: [await key(), await key()], status: "Active", created_at_ms: old },
+      { id: "tobi", label: "Tobi", is_admin: true, keys: [await key(), await key()], status: "Active", created_at_ms: old },
       { id: "oncall-sre", label: "On-call SRE", is_admin: false, keys: [await key()], status: "Active", created_at_ms: old },
       { id: "maya", label: "Maya Okafor", is_admin: false, keys: [await key()], status: "Active", created_at_ms: old + 3 * 24 * HOUR },
     ];
@@ -207,10 +207,10 @@ export class PreviewSource implements DataSource {
       this.history.set(`${p.id}@${version}`, full);
     };
     const none = { utc_hours: null, require_source_address: false } as PolicyInput["conditions"];
-    await pol({ id: "production-service-remediation", name: "Production service remediation", description: "Agents may restart customer-facing services on production after a human looks at the evidence.", effect: "Allow", subjects: { all_agents: false, agents: ["deploy-agent"] }, resources: { ids: [], environments: ["production"], tags: [] }, actions: [{ kind: "service.restart", targets: ["checkout-api", "payments-api"] }], max_duration_secs: 900, max_uses: 1, approval: { required: 1, approvers: [] }, conditions: none }, 3, "success", now - 9 * 24 * HOUR);
-    await pol({ id: "log-inspection", name: "Log inspection", description: "Read-only journal access for triage.", effect: "Allow", subjects: { all_agents: true, agents: [] }, resources: { ids: [], environments: ["production", "staging"], tags: [] }, actions: [{ kind: "logs.read", targets: ["*"] }], max_duration_secs: 900, max_uses: 5, approval: { required: 0, approvers: [] }, conditions: none }, 1, "success", now - 20 * 24 * HOUR);
-    await pol({ id: "status-checks", name: "Status checks", description: "", effect: "Allow", subjects: { all_agents: true, agents: [] }, resources: { ids: [], environments: ["production", "staging"], tags: [] }, actions: [{ kind: "service.status", targets: ["*"] }], max_duration_secs: 600, max_uses: 10, approval: { required: 0, approvers: [] }, conditions: none }, 1, "success", now - 20 * 24 * HOUR);
-    await pol({ id: "never-touch-sshd", name: "Never touch sshd", description: "Restarting sshd can lock everyone out. No agent, ever.", effect: "Deny", subjects: { all_agents: true, agents: [] }, resources: { ids: [], environments: ["production", "staging"], tags: [] }, actions: [{ kind: "service.restart", targets: ["sshd"] }], max_duration_secs: 60, max_uses: 1, approval: { required: 0, approvers: [] }, conditions: none }, 1, "success", now - 20 * 24 * HOUR);
+    await pol({ id: "production-service-remediation", name: "Production service remediation", description: "Agents may restart customer-facing services on production after a human looks at the evidence.", effect: "Allow", subjects: { all_agents: false, agents: ["deploy-agent"] }, resources: { ids: [], environments: ["production"], tags: [] }, actions: [{ kind: "service.restart", targets: ["checkout-api", "payments-api"] }], max_duration_secs: 900, max_uses: 1, approval: { required: 1, approvers: [] }, conditions: none }, 3, "tobi", now - 9 * 24 * HOUR);
+    await pol({ id: "log-inspection", name: "Log inspection", description: "Read-only journal access for triage.", effect: "Allow", subjects: { all_agents: true, agents: [] }, resources: { ids: [], environments: ["production", "staging"], tags: [] }, actions: [{ kind: "logs.read", targets: ["*"] }], max_duration_secs: 900, max_uses: 5, approval: { required: 0, approvers: [] }, conditions: none }, 1, "tobi", now - 20 * 24 * HOUR);
+    await pol({ id: "status-checks", name: "Status checks", description: "", effect: "Allow", subjects: { all_agents: true, agents: [] }, resources: { ids: [], environments: ["production", "staging"], tags: [] }, actions: [{ kind: "service.status", targets: ["*"] }], max_duration_secs: 600, max_uses: 10, approval: { required: 0, approvers: [] }, conditions: none }, 1, "tobi", now - 20 * 24 * HOUR);
+    await pol({ id: "never-touch-sshd", name: "Never touch sshd", description: "Restarting sshd can lock everyone out. No agent, ever.", effect: "Deny", subjects: { all_agents: true, agents: [] }, resources: { ids: [], environments: ["production", "staging"], tags: [] }, actions: [{ kind: "service.restart", targets: ["sshd"] }], max_duration_secs: 60, max_uses: 1, approval: { required: 0, approvers: [] }, conditions: none }, 1, "tobi", now - 20 * 24 * HOUR);
 
     // ----- history, oldest first
     const mk = async (o: { agent: string; resource: string; action: string; secs: number; uses?: number; reason: string; at: number; context?: ContextDocument }) => {
@@ -234,7 +234,7 @@ export class PreviewSource implements DataSource {
     };
 
     const a = await mk({ agent: "deploy-agent", resource: "prod-web-02", action: "service.restart:payments-api", secs: 600, reason: "payments-api leaking file descriptors since 03:10; restart clears it", at: now - 26 * HOUR });
-    await approveAt(a, "success", now - 26 * HOUR + 50_000);
+    await approveAt(a, "tobi", now - 26 * HOUR + 50_000);
     allowed(a, now - 26 * HOUR + 80_000);
 
     await mk({ agent: "ci-release-bot", resource: "prod-web-02", action: "service.restart:nginx", secs: 3600, reason: "post-release cache warmup", at: now - 9 * HOUR });
@@ -252,7 +252,7 @@ export class PreviewSource implements DataSource {
     this.ev(c, "authorization_revoked", "oncall-sre", "Rolled back deploy #1839 instead", now - 5 * HOUR + 200_000);
 
     const d = await mk({ agent: "deploy-agent", resource: "prod-web-03", action: "service.restart:checkout-api", secs: 600, reason: "checkout-api on prod-web-03 failing health checks after config reload", at: now - 42 * MIN });
-    await approveAt(d, "success", now - 41 * MIN);
+    await approveAt(d, "tobi", now - 41 * MIN);
     this.deniedLocal(d, "no_adapter", "cat", "sudo cat /etc/shadow", now - 39 * MIN);
     this.deniedConsume(d, "out_of_scope", "service.restart:sshd", "sudo systemctl restart sshd", now - 38 * MIN - 30_000);
     allowed(d, now - 38 * MIN);

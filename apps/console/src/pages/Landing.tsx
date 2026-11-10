@@ -43,7 +43,7 @@ const SNIPPETS: Record<string, string> = {
 request #1042 · awaiting approval (production-service-remediation)
 
 $ sudoctl wait 1042
-✓ approved by success · certificate serial 1042 · valid 10m · 1 use
+✓ approved by tobi · certificate serial 1042 · valid 10m · 1 use
 
 $ sudoctl exec 1042 -- sudo systemctl restart checkout-api
 ✓ allowed · service.restart:checkout-api · use 1/1`,

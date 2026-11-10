@@ -55,9 +55,9 @@ test("config precedence: flags > env > file; missing contract is a usage error",
 test("keys are chosen by role and principal", () => {
   const home = mkdtempSync(join(tmpdir(), "sbc-cli-"));
   saveKey({ account_id: "c.testnet", public_key: "ed25519:a", private_key: "ed25519:x", role: "Approver", principal: "oncall", created_at_ms: 0 }, home);
-  saveKey({ account_id: "c.testnet", public_key: "ed25519:b", private_key: "ed25519:y", role: "Admin", principal: "success", created_at_ms: 0 }, home);
+  saveKey({ account_id: "c.testnet", public_key: "ed25519:b", private_key: "ed25519:y", role: "Admin", principal: "tobi", created_at_ms: 0 }, home);
   assert.equal(findKey(["Approver", "Admin"], "c.testnet", undefined, home).principal, "oncall");
-  assert.equal(findKey(["Approver", "Admin"], "c.testnet", "success", home).role, "Admin");
+  assert.equal(findKey(["Approver", "Admin"], "c.testnet", "tobi", home).role, "Admin");
   assert.throws(() => findKey(["Agent"], "c.testnet", undefined, home), /no Agent key/);
   assert.throws(() => findKey(["Admin"], "other.testnet", undefined, home), UsageError);
 });
