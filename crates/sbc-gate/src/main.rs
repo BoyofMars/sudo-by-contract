@@ -70,6 +70,30 @@ fn main() {
                 }
             }
         }
+        Some("keygen") => {
+            // Manual enrollment path: generate the gate key locally, print the public half.
+            let account = flag(&args, "--account");
+            let out = flag(&args, "--out");
+            match (account, out) {
+                (Some(a), Some(o)) => {
+                    let s = sbc_gate::near::Signer::generate(&a);
+                    match std::fs::write(&o, serde_json::to_string_pretty(&s.key_file()).unwrap()) {
+                        Ok(()) => {
+                            println!("{}", s.public_key_string());
+                            0
+                        }
+                        Err(e) => {
+                            eprintln!("cannot write {}: {}", o, e);
+                            1
+                        }
+                    }
+                }
+                _ => {
+                    eprintln!("usage: sbc-gate keygen --account <contract> --out <file>");
+                    2
+                }
+            }
+        }
         Some("sshd-config") => match GateConfig::load(&config_path()) {
             Ok(c) => {
                 print!("{}", enroll::sshd_snippet(&c));

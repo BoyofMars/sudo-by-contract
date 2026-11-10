@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Tests (core, gate, contract)
+        run: cargo test --workspace
+      - name: Contract compiles to wasm
+        run: cargo build -p sbc-policy --target wasm32-unknown-unknown --release
+      - name: OpenSSH interop (our certificates verified by ssh-keygen)
+        run: |
+          d=$(mktemp -d)
+          ssh-keygen -q -t ed25519 -N '' -f "$d/agent"
+          cargo run -q -p sbc-core --example interop -- mint "$d/agent.pub" "$d/cert.pub" 600 1042
+          ssh-keygen -L -f "$d/cert.pub"
+
+  sshd-integration:
+    runs-on: ubuntu-latest
+    container: rust:1-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - run: apt-get update && apt-get install -y --no-install-recommends openssh-server openssh-client python3 procps
+      - run: cargo build --release -p sbc-gate
+      - name: Real sshd + sbc-gate against a mock chain
+        run: bash sandbox/ci/sshd-integration.sh target/release/sbc-gate
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm test
+      - run: npx tsc -p tsconfig.json --noEmit
+
+  console:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --prefix apps/console
+      - run: npm run build --prefix apps/console
+
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f sandbox/demo-server/Dockerfile -t sbc-demo-server .
+      - run: docker build -f sandbox/node/Dockerfile -t sbc-node .
+      - run: docker build -f sandbox/console/Dockerfile -t sbc-console .
