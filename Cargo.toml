@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/sbc-core", "crates/sbc-gate", "contracts/sbc-policy"]
+members = ["crates/sbc-core", "crates/sbc-gate", "crates/sbc-wasm", "contracts/sbc-policy"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "Apache-2.0"
+license = "MIT"
 repository = "https://github.com/BoyofMars/sudo-by-contract"
 
 [profile.release]

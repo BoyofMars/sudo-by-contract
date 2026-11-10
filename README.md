@@ -86,4 +86,4 @@ npm test
 * **Public metadata.** Resource and service identifiers are on-chain; use aliases where
   topology is sensitive ([PRIVACY.md](docs/PRIVACY.md)).
 
-License: Apache-2.0.
+License: [MIT](LICENSE).
