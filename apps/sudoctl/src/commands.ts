@@ -608,7 +608,50 @@ export const commands: Record<string, Command> = {
       ctx.out(`${mark.info} ${describePolicy(p)}`);
       const { signer } = await signerFor(r, ["Admin"], ctx.args.flag("as"));
       const v = await contractOf(r).upsertPolicy(signer, p);
-      ctx.out(`${mark.ok} Policy ${p.id} is now version ${v}`);
+      if (v === 0) {
+        const pending = (await contractOf(r).policyProposals()).filter((x) => x.policy.id === p.id).pop();
+        ctx.out(`${mark.info} Proposed. This contract requires an admin quorum for policy changes; another admin must run:\n  sudoctl admin policy confirm ${pending?.id ?? "<proposal id>"}`);
+      } else {
+        ctx.out(`${mark.ok} Policy ${p.id} is now version ${v}`);
+      }
+      return 0;
+    },
+  },
+
+  "admin policy proposals": {
+    summary: "Policy changes waiting for the admin quorum",
+    usage: "sudoctl admin policy proposals [--json]",
+    async run(ctx) {
+      const r = cfg(ctx);
+      const props = await contractOf(r).policyProposals();
+      if (ctx.args.bool("json")) {
+        ctx.out(JSON.stringify(props, null, 2));
+        return 0;
+      }
+      if (!props.length) ctx.out("No pending policy changes.");
+      for (const x of props) {
+        ctx.out(`#${x.id}  ${x.policy.id}  approved by ${x.approvals.join(", ")}  expires ${new Date(x.expires_at_ms).toISOString()}\n    ${describePolicy(x.policy)}`);
+      }
+      return 0;
+    },
+  },
+
+  "admin policy confirm": {
+    summary: "Agree to a pending policy change (counts toward the admin quorum)",
+    usage: "sudoctl admin policy confirm <proposal-id>",
+    async run(ctx) {
+      const r = cfg(ctx);
+      const id = Number(ctx.args.pos(0, "proposal-id"));
+      const props = await contractOf(r).policyProposals();
+      const x = props.find((p) => p.id === id);
+      if (!x) {
+        ctx.err(`no pending proposal #${id}`);
+        return 1;
+      }
+      ctx.out(`${mark.info} ${describePolicy(x.policy)}`);
+      const { signer } = await signerFor(r, ["Admin"], ctx.args.flag("as"));
+      const v = await contractOf(r).confirmPolicy(signer, id);
+      ctx.out(v ? `${mark.ok} Quorum met: policy ${x.policy.id} is now version ${v}` : `${mark.ok} Confirmed; still waiting for more admins`);
       return 0;
     },
   },
