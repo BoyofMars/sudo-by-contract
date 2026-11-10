@@ -1,0 +1,26 @@
+{
+  "name": "sudo-by-contract",
+  "private": true,
+  "description": "Programmable, auditable, ephemeral machine authority for AI agents, on NEAR.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/sudoctl",
+    "apps/relay",
+    "apps/demo-agent",
+    "apps/sbc-mcp"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test packages/sbc-client/test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@near-js/crypto": "^2.5.1",
+    "@near-js/transactions": "^2.5.1",
+    "@types/node": "^24.19.2",
+    "typescript": "5.9"
+  }
+}

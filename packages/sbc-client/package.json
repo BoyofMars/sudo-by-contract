@@ -1,0 +1,10 @@
+{
+  "name": "@sbc/client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isomorphic (browser + Node) client for the Sudo by Contract policy contract. No wallet, no near-api-js: borsh + WebCrypto Ed25519.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
