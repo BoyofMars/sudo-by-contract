@@ -13,6 +13,13 @@ private key exists anywhere** to leak, steal or misuse.
 Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 ```
 
+| | |
+|---|---|
+| **Contract** | [`bagyard-sexton.testnet`](https://testnet.nearblocks.io/address/bagyard-sexton.testnet) (NEAR testnet) |
+| **MPC signer** | [`v1.signer-prod.testnet`](https://testnet.nearblocks.io/address/v1.signer-prod.testnet) (Chain Signatures, Ed25519 domain) |
+| **Production SSH CA** | `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICA7lQ5yFKYgWPJFZuI9RVDrWMKp6z/qtIgOw2AHU2qR` — derived by the MPC network for the contract; no private key exists |
+| **Live verification** | 22/22 checks against testnet: [docs/LIVE_RUN.md](docs/LIVE_RUN.md) |
+
 | | Mechanism |
 |---|---|
 | **No standing privilege** | Agents hold no credential until a capability is approved; it carries one typed action, one host, N uses, a window. |
@@ -27,12 +34,13 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 |---|---|
 | The NEAR MPC network can act as an OpenSSH CA | Read the MPC contract source (`sign` with `payload_v2.Eddsa`, ≤ 1232 bytes; standard Ed25519 verification against the derived key) and queried the live testnet signer: domain 1 = Frost/Ed25519, threshold 11. |
 | Our certificates are real OpenSSH certificates | `ssh-keygen -L` accepts certificates built by `sbc-core` (the code the contract runs); a single flipped bit is rejected with `incorrect signature`; re-encoding an `ssh-keygen -s` certificate reproduces its signed bytes exactly (`crates/sbc-core/examples/interop.rs`). |
-| Policy, approvals, signing, consume, expiry, revocation, host binding, admin quorum | 27 contract tests with a simulated MPC callback carrying real Ed25519 signatures (`contracts/sbc-policy/src/tests.rs`). |
-| The gate enforces it | 8 unit + 4 end-to-end gate tests against a mock NEAR RPC that verifies every transaction signature: hero sequence, independent certificate checks, host ceiling, fail-closed (`crates/sbc-gate/tests/exec_flow.rs`). |
+| Policy, approvals, signing, consume, expiry, revocation, host binding, admin quorum | 28 contract tests with a simulated MPC callback carrying real Ed25519 signatures (`contracts/sbc-policy/src/tests.rs`). |
+| The gate enforces it | 8 unit + 5 end-to-end gate tests against a mock NEAR RPC that verifies every transaction signature: hero sequence, independent certificate checks, host ceiling, serial 0, fail-closed (`crates/sbc-gate/tests/exec_flow.rs`). |
 | Revocation reaches sshd | KRL produced from revoked serials makes `ssh-keygen -Q` report `REVOKED`. |
 | No wallet needed | Hand-written borsh transactions match `@near-js/transactions` byte-for-byte; WebCrypto Ed25519 signing in browser and Node. |
 | SDK, CLI, relay, MCP | 33 offline tests; `tsc` clean. |
-| Live testnet end-to-end | `scripts/e2e-testnet.ts` (contract + MPC + `ssh-keygen` + real gate binary). Needs a deployed contract — see [docs/DEMO.md](docs/DEMO.md). |
+| Live testnet end-to-end | **22/22** with `scripts/e2e-testnet.ts`: the testnet MPC network signed the certificate 6.7 s after approval, `ssh-keygen` verified it, and the real gate binary enforced scope, single use, revocation (→ KRL) and expiry through the deployed contract. The first live run caught two bugs the offline tests missed; both are fixed ([docs/LIVE_RUN.md](docs/LIVE_RUN.md)). |
+| Real sshd | `sandbox/ci/sshd-integration.sh` runs OpenSSH with the generated config in CI (Linux). Not run on the Windows machine this was built on. |
 
 Run everything that runs offline:
 
