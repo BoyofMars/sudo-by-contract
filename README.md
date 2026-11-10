@@ -22,6 +22,16 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 | **Production SSH CA** | `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICA7lQ5yFKYgWPJFZuI9RVDrWMKp6z/qtIgOw2AHU2qR` — derived by the MPC network for the contract; no private key exists |
 | **Live verification** | 22/22 checks against testnet: [docs/LIVE_RUN.md](docs/LIVE_RUN.md) |
 
+## Try it in two minutes
+
+| Do | See |
+|---|---|
+| Open [sudo-by-contract.vercel.app](https://sudo-by-contract.vercel.app) → **Try to escape** | You hold one capability (restart `checkout-api`, once, 10 min). Type `sudo cat /etc/shadow`, `sudo -i`, `…; id`, `restart sshd`. Each layer decides in turn; the parser and the executed argv are the gate's real Rust code (`sbc-core`) compiled to WebAssembly. `0 escaped`. |
+| Open [/#/proof](https://sudo-by-contract.vercel.app/#/proof) | Your browser asks NEAR's MPC contract for the CA key, checks it matches what the policy contract uses, shows another account derives a different key, and verifies a real issued certificate's Ed25519 signature. **7/7 in ~2 s**, no account. |
+| `npm ci && npm run verify:live` | The same seven checks from a terminal, plus `ssh-keygen -L` (OpenSSH) accepting the MPC-signed certificate. No keys, no accounts. |
+| `cargo test --workspace` and `npm test` | 62 Rust tests (contract lifecycle with a simulated MPC callback, gate end-to-end against a signature-checking mock RPC, OpenSSH encoding) and 33 TypeScript tests. |
+| [Live console](https://sudo-by-contract.vercel.app/#/console?contract=bagyard-sexton.testnet) (read-only) | Real capabilities, denials and certificates from the testnet runs, straight from the contract. The default console is a labelled simulation of the hero scenario. |
+
 | | Mechanism |
 |---|---|
 | **No standing privilege** | Agents hold no credential until a capability is approved; it carries one typed action, one host, N uses, a window. |
@@ -61,6 +71,7 @@ npm test
 | `contracts/sbc-policy` | NEAR policy contract (Rust): identities as scoped access keys, policy evaluation, capability state machine, certificate construction, MPC signing + verification, `consume`, revocation, audit chain |
 | `crates/sbc-core` | Shared by contract and gate: OpenSSH certificate encoding/parsing, closed command grammar, identifier grammars, redaction |
 | `crates/sbc-gate` | Host enforcement binary: sshd forced command, `enroll`, `sync` (heartbeat + KRL), `check`, `sudoers`, `sshd-config` |
+| `crates/sbc-wasm` | `sbc-core`'s gate logic compiled to WebAssembly (72 KB, no bindgen) for the in-browser "Try to escape" playground |
 | `packages/sbc-client` | Isomorphic NEAR + OpenSSH client (borsh, WebCrypto Ed25519, typed contract API) |
 | `packages/sbc-agent` | Agent SDK: request → wait → exec → release |
 | `apps/sudoctl` | CLI for agents, approvers and admins |
@@ -71,6 +82,13 @@ npm test
 | `sandbox/` | Docker: real OpenSSH demo server, relay, console, agent |
 | `scripts/` | `bootstrap-testnet.ts`, `e2e-testnet.ts` |
 | `docs/` | [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT_MODEL.md) · [Failure modes](docs/FAILURE_MODES.md) · [Privacy](docs/PRIVACY.md) · [Policy model](docs/POLICY.md) · [API](docs/API.md) · [Demo](docs/DEMO.md) · [Comparison & roadmap](docs/COMPARISON.md) |
+
+## Hackathon
+
+* Built at **NEAR HACKATHON** (November 2026) for **AI Security & Defense** and **Open Innovation**.
+* **All code in this repository was written during the hackathon** (first commit 2026-11-10). There is no pre-existing code.
+* **NEAR integration:** the policy contract runs on NEAR testnet; **NEAR Chain Signatures** (MPC, Ed25519 domain) is the SSH certificate authority, with the CA key derived for the contract's account; **function-call access keys** on the contract account are the identity layer for admins, approvers, agents and hosts; every authorisation event is a NEP-297 event in a hash-chained, on-chain audit log.
+* The author's other, independent submission is **[Necropolis](https://github.com/BoyofMars/necropolis)** — a graveyard for dead memecoins on Solana and Base, with burials verified by NEAR's MPC network.
 
 ## Honest limits
 
