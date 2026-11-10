@@ -1,0 +1,333 @@
+/* /#/proof — see pages/Proof.tsx */
+
+.pf {
+  max-width: var(--l-w);
+  margin: 0 auto;
+  padding: 40px 24px 96px;
+}
+.pf-head h1 {
+  font-size: clamp(34px, 4.4vw, 52px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  font-weight: 650;
+}
+.pf-head .lead {
+  max-width: 68ch;
+}
+.pf-head .lead strong {
+  color: var(--text);
+  font-weight: 560;
+}
+.pf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+}
+.pf-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--t-12);
+}
+.pf-chip em {
+  font-style: normal;
+  font-size: var(--t-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* ---------------------------------------------------------- status */
+.pf-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+  margin-top: 32px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  transition: border-color 300ms var(--ease), background 300ms var(--ease);
+}
+.pf-status.ok {
+  border-color: var(--active-line);
+  background: var(--active-bg);
+}
+.pf-status.bad {
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+}
+.pf-status-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  font-size: var(--t-14);
+  line-height: 1.55;
+  max-width: 80ch;
+}
+.pf-status-text strong {
+  font-weight: 620;
+}
+.pf-status.ok .pf-status-text strong {
+  color: var(--active);
+}
+.pf-status.bad .pf-status-text strong {
+  color: var(--danger);
+}
+.pf-status-text > span {
+  color: var(--text-2);
+}
+.pf-time {
+  font-weight: 400;
+  font-size: var(--t-13);
+}
+.pf-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pf-bracket {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--text-3);
+}
+.pf-status.ok .pf-bracket {
+  color: var(--active);
+}
+.pf-seg {
+  width: 22px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  transition: background 220ms var(--ease);
+}
+.pf-seg.running {
+  background: var(--pending-line);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.pf-seg.pass {
+  background: var(--active);
+}
+.pf-seg.fail {
+  background: var(--danger);
+}
+
+/* ---------------------------------------------------------- layout */
+.pf-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 28px;
+  margin-top: 28px;
+  align-items: start;
+}
+@media (max-width: 980px) {
+  .pf-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ----------------------------------------------------------- steps */
+.pf-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+.pf-step {
+  display: grid;
+  grid-template-columns: 26px 24px minmax(0, 1fr);
+  gap: 12px;
+  padding: 18px 18px 18px 16px;
+  border-top: 1px solid var(--line);
+}
+.pf-step:first-child {
+  border-top: 0;
+}
+.pf-n {
+  font-size: var(--t-12);
+  color: var(--text-3);
+  padding-top: 3px;
+}
+.pf-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  transition: background 200ms var(--ease), border-color 200ms var(--ease);
+}
+.pf-mark.running {
+  border-color: var(--pending-line);
+  background: var(--pending-bg);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.pf-mark.pass {
+  border-color: var(--active-line);
+  background: var(--active-bg);
+  color: var(--active);
+}
+.pf-mark.fail {
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.pf-body strong {
+  font-size: var(--t-15);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.pf-step.pending .pf-body strong {
+  color: var(--text-3);
+}
+.pf-claim {
+  margin-top: 2px;
+  font-size: var(--t-13);
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.pf-detail {
+  margin-top: 10px;
+  font-size: var(--t-13);
+  line-height: 1.55;
+  color: var(--text);
+  animation: tl-in 200ms var(--ease);
+}
+.pf-step.fail .pf-detail {
+  color: var(--danger);
+}
+.pf-facts {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  animation: tl-in 240ms var(--ease);
+}
+.pf-facts div {
+  display: grid;
+  grid-template-columns: minmax(110px, 168px) minmax(0, 1fr);
+  gap: 10px;
+}
+.pf-facts dt {
+  font-size: var(--t-12);
+  color: var(--text-3);
+  word-break: break-word;
+}
+.pf-facts dd {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.pf-skel {
+  display: block;
+  height: 14px;
+  width: 46%;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+
+/* ----------------------------------------------------------- aside */
+.pf-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 72px;
+}
+.pf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+.pf-card .eyebrow {
+  margin: 0;
+}
+.pf-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.pf-cert {
+  margin: 0;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pf-card p {
+  line-height: 1.6;
+}
+.pf-card a {
+  color: var(--text);
+}
+.pf-links a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--t-13);
+  text-decoration: none;
+  padding: 4px 0;
+}
+.pf-links a:hover {
+  color: var(--active);
+}
+.pf-links .mono {
+  color: var(--text-2);
+  font-size: var(--t-12);
+}
+
+@media (max-width: 980px) {
+  .pf-aside {
+    position: static;
+  }
+}
+@media (max-width: 640px) {
+  .pf {
+    padding-top: 24px;
+  }
+  .hide-sm {
+    display: none !important;
+  }
+  .pf-facts div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .pf-step {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .pf-n {
+    display: none;
+  }
+  .pf-seg {
+    width: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-detail,
+  .pf-facts,
+  .pf-seg.running,
+  .pf-mark.running {
+    animation: none;
+  }
+}
