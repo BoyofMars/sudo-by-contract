@@ -1,5 +1,23 @@
 [package]
 name = "sbc-gate"
-version = "0.1.0"
-edition = "2021"
+description = "Sudo by Contract host gate: the forced command that turns an approved capability into exactly one typed action."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
+[[bin]]
+name = "sbc-gate"
+path = "src/main.rs"
+
+[dependencies]
+sbc-core = { path = "../sbc-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+ureq = { version = "2.12", features = ["json"] }
+ed25519-dalek = { version = "2.2", features = ["rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+sha2 = "0.10"
+base64 = "0.22"
+bs58 = "0.5"
+hex = "0.4"
