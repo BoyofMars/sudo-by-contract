@@ -1,0 +1,612 @@
+/* "Try to escape" playground — see components/EscapePlayground.tsx */
+
+.esc {
+  margin-top: var(--s-2);
+}
+
+/* ------------------------------------------------- capability ticket */
+.esc-ticket {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+.esc-ticket-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.esc-bracket {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--active);
+  transition: color var(--dur) var(--ease);
+}
+.esc-ticket.st-spent .esc-bracket,
+.esc-ticket.st-expired .esc-bracket {
+  color: var(--line-strong);
+}
+.esc-ticket.st-revoked .esc-bracket {
+  color: var(--danger);
+}
+.esc-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+  font-size: var(--t-13);
+}
+.esc-id {
+  font-weight: 600;
+}
+.esc-field em {
+  font-style: normal;
+  font-size: var(--t-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-right: 6px;
+}
+.esc-status {
+  font-size: var(--t-12);
+  font-weight: 550;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--active-line);
+  background: var(--active-bg);
+  color: var(--active);
+}
+.esc-status.st-spent,
+.esc-status.st-expired {
+  border-color: var(--line);
+  background: var(--muted-bg);
+  color: var(--muted);
+}
+.esc-status.st-revoked {
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.esc-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------ layout */
+.esc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 12px;
+  align-items: stretch;
+}
+@media (max-width: 980px) {
+  .esc-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------- terminal */
+.esc-term {
+  display: flex;
+  flex-direction: column;
+  height: 470px;
+  cursor: text;
+}
+.esc-score {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--term-dim);
+}
+.esc-score-run {
+  color: #b9bcc4;
+}
+.esc-score-escape {
+  color: #3cc9b0;
+  font-weight: 600;
+}
+.esc-score-escape.bad {
+  color: #f2756d;
+}
+.esc-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.esc-intro {
+  padding: 4px 6px;
+  color: var(--term-dim);
+  line-height: 1.65;
+}
+.esc-intro p + p {
+  margin-top: 6px;
+}
+.esc-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px 7px 10px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  animation: tl-in 160ms var(--ease);
+}
+.esc-entry:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.esc-entry.on {
+  background: rgba(255, 255, 255, 0.05);
+}
+.esc-entry.ran {
+  border-left-color: rgba(60, 201, 176, 0.7);
+}
+.esc-entry.denied {
+  border-left-color: rgba(242, 117, 109, 0.6);
+}
+.esc-entry .tl.cmd {
+  margin-top: 0;
+}
+.esc-ok {
+  color: #3cc9b0;
+}
+.esc-no {
+  color: #f2756d;
+}
+.esc-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.02);
+}
+.esc-input .ps {
+  color: #58c9b2;
+}
+.esc-input input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: #f2f2f4;
+  caret-color: #3cc9b0;
+  font-size: 13px;
+}
+.esc-input input::placeholder {
+  color: var(--term-dim);
+}
+.esc-run {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 5px;
+  background: rgba(60, 201, 176, 0.16);
+  color: #3cc9b0;
+  cursor: pointer;
+}
+.esc-run:disabled {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--term-dim);
+  cursor: default;
+}
+
+/* ------------------------------------------------------- the layers */
+.esc-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  min-width: 0;
+}
+.esc-side-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.esc-side-head .eyebrow {
+  margin: 0;
+}
+.esc-layers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+}
+.esc-layers::before {
+  /* the path every command walks */
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--line);
+}
+.esc-layer {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  animation: esc-in 220ms var(--ease) both;
+}
+@keyframes esc-in {
+  from {
+    opacity: 0;
+    transform: translateX(-3px);
+  }
+}
+.esc-layer-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+.esc-layer strong {
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.esc-layer p {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+  word-break: break-word;
+}
+.esc-layer p.mono {
+  font-size: 12px;
+}
+.esc-layer.pass p {
+  color: var(--text);
+}
+.esc-layer.fail p {
+  color: var(--danger);
+}
+.esc-layer.skip strong,
+.esc-layer.skip p {
+  color: var(--text-3);
+}
+.esc-src {
+  flex: none;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.esc-src.real {
+  border-color: var(--active-line);
+  color: var(--active);
+}
+.esc-mark {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+.esc-mark.pass {
+  border-color: var(--active-line);
+  background: var(--active-bg);
+  color: var(--active);
+}
+.esc-mark.fail {
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.esc-mark.skip {
+  border-style: dashed;
+}
+
+.esc-result {
+  padding: 12px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--line);
+  animation: esc-in 260ms var(--ease) 360ms both;
+}
+.esc-result.ran {
+  border-color: var(--active-line);
+  background: var(--active-bg);
+}
+.esc-result.denied {
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+}
+.esc-result-title {
+  display: block;
+  font-size: var(--t-11);
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.esc-result.ran .esc-result-title {
+  color: var(--active);
+}
+.esc-result.denied .esc-result-title {
+  color: var(--danger);
+}
+.esc-argv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.esc-argv span {
+  padding: 2px 6px;
+  border: 1px solid var(--active-line);
+  border-radius: 3px;
+  background: var(--surface);
+  font-size: 12px;
+}
+.esc-audit {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+.esc-audit div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+}
+.esc-audit dt {
+  font-size: var(--t-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding-top: 1px;
+}
+.esc-audit dd {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-2);
+  word-break: break-word;
+}
+.esc-hint {
+  line-height: 1.6;
+}
+.esc-link {
+  border: 0;
+  padding: 0 2px;
+  background: none;
+  color: var(--active);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------- try chips */
+.esc-tries {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+.esc-tries-label {
+  font-size: var(--t-11);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-right: 4px;
+}
+.esc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.esc-chip:hover:not(:disabled) {
+  border-color: var(--danger-line);
+  color: var(--text);
+}
+.esc-chip.legit {
+  border-color: var(--active-line);
+  color: var(--active);
+}
+.esc-chip.legit:hover:not(:disabled) {
+  border-color: var(--active);
+}
+.esc-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.esc-foot {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 14px;
+  max-width: 88ch;
+  line-height: 1.6;
+}
+.esc-foot .icon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--active);
+}
+.esc-err {
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .esc-term {
+    height: 400px;
+  }
+  .esc-bracket {
+    display: none;
+  }
+  .esc-audit div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .esc-layer,
+  .esc-result,
+  .esc-entry {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------- landing additions (proof, live) */
+.l-links .l-link {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--r-2);
+  color: var(--text-2);
+  font-size: var(--t-13);
+  text-decoration: none;
+}
+.l-links .l-link:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.hero-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  color: var(--text-2);
+}
+.hero-live a {
+  color: var(--text);
+  text-underline-offset: 3px;
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--active);
+  box-shadow: 0 0 0 3px var(--active-bg);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+.proof-cta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  margin-top: 22px;
+  padding: 16px 18px;
+  border: 1px solid var(--active-line);
+  border-radius: var(--r-3);
+  background: var(--active-bg);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.proof-cta:hover {
+  border-color: var(--active);
+}
+.proof-cta-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--active-line);
+  background: var(--surface);
+  color: var(--active);
+}
+.proof-cta-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.proof-cta-text strong {
+  font-size: var(--t-15);
+  font-weight: 620;
+}
+.proof-cta-text span {
+  font-size: var(--t-13);
+  line-height: 1.55;
+  color: var(--text-2);
+}
+.proof-cta-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: var(--t-13);
+  color: var(--active);
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .proof-cta {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .proof-cta-go {
+    grid-column: 2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
+
+/* nav: seven links need room; never wrap a label onto two lines */
+.l-nav .brand,
+.l-links button,
+.l-links .l-link {
+  white-space: nowrap;
+}
+@media (max-width: 1120px) {
+  .l-links {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .esc-term .term-title {
+    display: none;
+  }
+}

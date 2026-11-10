@@ -7,6 +7,8 @@ import "./styles/base.css";
 import "./styles/components.css";
 import "./styles/console.css";
 import "./styles/landing.css";
+import "./styles/escape.css";
+import "./styles/proof.css";
 import { App } from "./App.tsx";
 
 createRoot(document.getElementById("root")!).render(

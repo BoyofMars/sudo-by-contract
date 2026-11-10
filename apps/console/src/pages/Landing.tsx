@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EscapePlayground } from "../components/EscapePlayground.tsx";
 import { HeroTerminal } from "../components/HeroTerminal.tsx";
 import { Icon, Mark } from "../components/Icon.tsx";
 import { cx } from "../components/ui.tsx";
@@ -82,7 +83,9 @@ export function Landing() {
         <nav className="l-links">
           <button onClick={() => go("flow")}>How it works</button>
           <button onClick={() => go("enforcement")}>Enforcement</button>
+          <button onClick={() => go("escape")}>Try to escape</button>
           <button onClick={() => go("no-key")}>No master key</button>
+          <a className="l-link" href="#/proof">Verify live</a>
           <button onClick={() => go("compare")}>Compare</button>
           <button onClick={() => go("developers")}>Developers</button>
         </nav>
@@ -103,12 +106,12 @@ export function Landing() {
           </p>
           <p className="lead strong-lead">No standing privilege. No master key anywhere.</p>
           <div className="hero-cta">
-            <a className="btn btn-primary btn-lg" href="#/console">Open the console <Icon name="arrow" size={14} /></a>
-            <button className="btn btn-secondary btn-lg" onClick={() => go("enforcement")}>See how it's enforced</button>
+            <button className="btn btn-primary btn-lg" onClick={() => go("escape")}>Try to escape <Icon name="arrow" size={14} /></button>
+            <a className="btn btn-secondary btn-lg" href="#/proof"><Icon name="shield" size={14} /> Verify it live</a>
           </div>
           {LIVE_CONTRACT ? (
-            <p className="muted small">
-              Live on NEAR testnet: <a href={`#/console?contract=${LIVE_CONTRACT}`} className="mono">{LIVE_CONTRACT}</a> (read-only view of the real contract and its audit trail)
+            <p className="hero-live small">
+              <span className="live-dot" aria-hidden /> Live on NEAR testnet · <a href={`#/console?contract=${LIVE_CONTRACT}`} className="mono">{LIVE_CONTRACT}</a> · <a href="#/console">console demo</a>
             </p>
           ) : null}
           <ul className="hero-proof">
@@ -116,6 +119,7 @@ export function Landing() {
             <li>Typed action adapters</li>
             <li>NEAR threshold signing</li>
             <li>Hash-chained audit</li>
+            <li>22/22 live on testnet</li>
           </ul>
         </div>
         <HeroTerminal />
@@ -214,6 +218,17 @@ Extensions: (none)`}</pre>
         </div>
       </section>
 
+      <section className="l-section" id="escape">
+        <div className="l-head">
+          <p className="eyebrow">Try to escape</p>
+          <h2>You are the agent. Get out.</h2>
+          <p className="l-sub">
+            You hold one capability: restart <code>checkout-api</code> on <code>prod-web-02</code>, once, for ten minutes. Type what a compromised or prompt-injected agent would type. The verdict comes from the gate's own Rust code, compiled to WebAssembly and running in this tab.
+          </p>
+        </div>
+        <EscapePlayground />
+      </section>
+
       <section className="l-section" id="no-key">
         <div className="l-head">
           <p className="eyebrow">Signing</p>
@@ -231,6 +246,14 @@ Extensions: (none)`}</pre>
           <Icon name="arrow" className="sig-arrow" />
           <div className="sig-node"><span className="mono small muted">04</span><strong>Host</strong><span>trusts the derived public key as its only user CA</span></div>
         </div>
+        <a className="proof-cta" href="#/proof">
+          <span className="proof-cta-mark"><Icon name="shield" size={18} /></span>
+          <span className="proof-cta-text">
+            <strong>Don't take our word for it.</strong>
+            <span>Your browser can ask NEAR's MPC network for this CA key, fetch a certificate the contract really issued, and verify its signature. Seven checks, about five seconds, no account.</span>
+          </span>
+          <span className="proof-cta-go">Verify it live <Icon name="arrow" size={14} /></span>
+        </a>
         <div className="caveat">
           <Icon name="alert" size={14} />
           <p>
