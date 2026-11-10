@@ -14,7 +14,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test packages/sbc-client/test/*.test.ts",
+    "test": "node --test \"packages/*/test/*.test.ts\" \"apps/sudoctl/test/*.test.ts\" \"apps/relay/test/*.test.ts\" \"apps/sbc-mcp/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

@@ -1,0 +1,13 @@
+{
+  "name": "@sbc/agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent SDK for Sudo by Contract: request a capability, wait for policy/approval, run exactly the approved action, release.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  }
+}

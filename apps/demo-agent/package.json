@@ -1,0 +1,13 @@
+{
+  "name": "@sbc/demo-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deploy Agent: the narrated hero demo for Sudo by Contract.",
+  "type": "module",
+  "bin": {
+    "sbc-demo-agent": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts"
+  }
+}

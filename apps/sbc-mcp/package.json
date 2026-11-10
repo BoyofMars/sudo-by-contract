@@ -1,0 +1,14 @@
+{
+  "name": "@sbc/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server exposing Sudo by Contract capabilities to AI agents (stdio, no dependencies).",
+  "type": "module",
+  "bin": {
+    "sbc-mcp": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test test/*.test.ts"
+  }
+}

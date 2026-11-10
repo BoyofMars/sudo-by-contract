@@ -1,0 +1,14 @@
+{
+  "name": "@sbc/sudoctl",
+  "version": "0.1.0",
+  "private": true,
+  "description": "sudoctl: request, approve and audit ephemeral machine authority (Sudo by Contract CLI).",
+  "type": "module",
+  "bin": {
+    "sudoctl": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test test/*.test.ts"
+  }
+}

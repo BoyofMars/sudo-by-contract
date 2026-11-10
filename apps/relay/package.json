@@ -1,0 +1,14 @@
+{
+  "name": "@sbc/relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private context + notification relay for Sudo by Contract (node:http + node:sqlite, no dependencies).",
+  "type": "module",
+  "bin": {
+    "sbc-relay": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test test/*.test.ts"
+  }
+}

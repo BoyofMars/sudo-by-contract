@@ -48,7 +48,7 @@ class Handler(BaseHTTPRequestHandler):
                     "failing_endpoint": "POST /checkout", "uptime_s": int(time.time() - STARTED),
                 })
             else:
-                self._send(200, {"service": NAME, "status": "healthy", "deployment": "#1842",
+                self._send(200, {"service": NAME, "status": "ok", "deployment": "#1842",
                                  "error_rate": 0.011, "uptime_s": int(time.time() - STARTED)})
         elif self.path.startswith("/checkout"):
             if degraded and random.random() < 0.18:
