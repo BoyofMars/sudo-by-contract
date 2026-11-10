@@ -182,7 +182,10 @@ export function createRelay(o: RelayOptions): { server: Server; close: () => voi
       await authed(req, pathAndQuery, undefined, READERS);
       const row = o.store.getContext(ctx[1]);
       if (!row) throw new HttpError(404, "no such context");
-      return json(res, 200, { hash: row.hash, agent_id: row.agent_id, document: JSON.parse(utf8.decode(row.body)), created_at_ms: row.created_at_ms });
+      // `raw` is the exact stored body, so clients verify sha256(raw) == on-chain context_hash
+      // without depending on JSON re-serialisation.
+      const raw = utf8.decode(row.body);
+      return json(res, 200, { hash: row.hash, agent_id: row.agent_id, document: JSON.parse(raw), raw, created_at_ms: row.created_at_ms });
     }
 
     if (method === "POST" && path === "/v1/gate-reports") {
