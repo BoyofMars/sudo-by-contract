@@ -615,3 +615,53 @@ fn simulate_matches_request_evaluation() {
     let s = w.c.simulate("deploy-agent".into(), "prod-web-02".into(), "service.restart:checkout-api".into(), 3600, None, None);
     assert_eq!(s.outcome, "rejected");
 }
+
+// ------------------------------------------------------- approver removal
+
+#[test]
+fn removing_an_approver_deletes_identity_but_not_history() {
+    let mut w = world();
+    let id = approved_active(&mut w, 600); // approved by "oncall"
+    w.as_key(&admin_dev());
+    w.c.set_approver_status("oncall".into(), Status::Suspended);
+    w.c.remove_approver("oncall".into());
+    assert!(w.c.list_approvers(None, None).iter().all(|a| a.id != "oncall"));
+    assert!(w.c.whoami(pk_of(&approver_dev())).binding.is_none(), "device key unbound");
+    let r = w.c.get_request(id).unwrap();
+    assert_eq!(r.approvals[0].approver_id, "oncall", "past approvals keep the id");
+}
+
+#[test]
+#[should_panic(expected = "suspend the approver before removing it")]
+fn active_approvers_cannot_be_removed() {
+    let mut w = world();
+    w.as_key(&admin_dev());
+    w.c.remove_approver("oncall".into());
+}
+
+#[test]
+#[should_panic(expected = "names this approver as eligible")]
+fn approvers_named_by_a_policy_cannot_be_removed() {
+    let mut w = world();
+    w.as_key(&admin_dev());
+    let mut p = policy_input("named", "service.restart", &["payments-api"], 600, 1, 1);
+    p.approval.approvers = vec!["oncall".into()];
+    w.c.upsert_policy(p);
+    w.c.set_approver_status("oncall".into(), Status::Suspended);
+    w.c.remove_approver("oncall".into());
+}
+
+#[test]
+#[should_panic(expected = "enrollment token predates this approver")]
+fn stale_tokens_cannot_enroll_into_a_reused_id() {
+    let mut w = world();
+    w.as_owner();
+    w.c.create_enrollment(Role::Approver, "oncall".into(), pk_of(&key(60)), Some(3600)).detach();
+    w.as_key(&admin_dev());
+    w.c.set_approver_status("oncall".into(), Status::Suspended);
+    w.c.remove_approver("oncall".into());
+    w.advance_secs(5);
+    w.c.create_approver("oncall".into(), "Someone else".into(), true);
+    w.as_key(&key(60));
+    w.c.complete_enrollment(pk_of(&key(61)), None);
+}

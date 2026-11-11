@@ -84,6 +84,7 @@ contract account* (they are function-call keys on it); the owner signs as itself
 | `add_environment(name)` | Admin / owner | asks the MPC contract for `derived_public_key` |
 | `create_agent / create_approver / create_resource / update_resource` | Admin / owner | |
 | `set_agent_status / set_approver_status / set_resource_status` | Admin / owner | resource `Disabled` = kill switch |
+| `remove_approver(id)` | Admin / owner | approver must be `Suspended` and named by no policy; deletes their device keys; history keeps the id |
 | `upsert_policy(policy) / set_policy_status(id, status)` | Admin / owner | versioned + hashed; with `policy_quorum > 1`, `upsert_policy` returns 0 and records a proposal |
 | `confirm_policy(proposal_id)` | Admin / owner | another distinct admin agrees; applies once the quorum is met |
 | `list_policy_proposals()` (view) | anyone | pending policy changes |

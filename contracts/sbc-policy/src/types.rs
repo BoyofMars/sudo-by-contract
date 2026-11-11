@@ -24,7 +24,7 @@ impl Role {
     /// Methods the NEAR protocol will let a key of this role call.
     pub fn method_names(&self) -> &'static str {
         match self {
-            Role::Admin => "upsert_policy,confirm_policy,set_policy_status,create_resource,update_resource,set_resource_status,create_agent,set_agent_status,create_approver,set_approver_status,create_enrollment,remove_key,add_environment,approve,deny,revoke",
+            Role::Admin => "upsert_policy,confirm_policy,set_policy_status,create_resource,update_resource,set_resource_status,create_agent,set_agent_status,create_approver,set_approver_status,remove_approver,create_enrollment,remove_key,add_environment,approve,deny,revoke",
             Role::Approver => "approve,deny,revoke",
             Role::Agent => "request_access,cancel_request",
             Role::Gate => "consume,report_denial,heartbeat",

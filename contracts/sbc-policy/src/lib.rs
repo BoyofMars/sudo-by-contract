@@ -419,6 +419,30 @@ impl SudoByContract {
         self.audit("approver_status", &actor, json!({ "approver_id": id, "status": status }));
     }
 
+    /// Delete a suspended approver (someone who left, a test identity) and
+    /// their device keys. Suspension comes first so removal is never a
+    /// one-click surprise. History is not rewritten: past approvals and audit
+    /// events keep the id. A later approver with the same id cannot be
+    /// enrolled by an old token (see `complete_enrollment`).
+    pub fn remove_approver(&mut self, id: String) {
+        let actor = self.require_admin();
+        let a = self.approvers.get(&id).cloned().unwrap_or_else(|| env::panic_str("approver not found"));
+        require!(a.status == Status::Suspended, "suspend the approver before removing it");
+        for p in self.policies.values() {
+            require!(!p.approval.approvers.contains(&id), format!("policy {} names this approver as eligible; update the policy first", p.id));
+        }
+        for p in self.policy_proposals.values() {
+            require!(!p.policy.approval.approvers.contains(&id), format!("pending policy proposal {} names this approver", p.id));
+        }
+        self.approvers.remove(&id);
+        let me = env::current_account_id();
+        for k in &a.keys {
+            self.keys.remove(k);
+            Promise::new(me.clone()).delete_key(k.clone()).detach();
+        }
+        self.audit("approver_removed", &actor, json!({ "approver_id": id, "keys_deleted": a.keys.len() }));
+    }
+
     pub fn create_agent(&mut self, id: String, label: String, owner: String, runtime: String) {
         let actor = self.require_admin();
         require!(validate::is_slug(&id), "agent id must be a slug");
@@ -545,7 +569,10 @@ impl SudoByContract {
         let mut replaced: Option<PublicKey> = None;
         match role {
             Role::Admin | Role::Approver => {
-                let a = self.approvers.get_mut(&p).unwrap();
+                let a = self.approvers.get_mut(&p).unwrap_or_else(|| env::panic_str("this approver no longer exists"));
+                // a token minted for a removed approver must not enroll into a
+                // new approver that reuses the id
+                require!(b.added_at_ms >= a.created_at_ms, "enrollment token predates this approver");
                 require!(a.keys.len() < 8, "too many devices");
                 a.keys.push(new_public_key.clone());
             }

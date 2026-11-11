@@ -74,6 +74,7 @@ export class SudoContract {
   addEnvironment(admin: Signer, name: string) { return this.call(admin, "add_environment", { name }, 60n * TGAS); }
   createApprover(admin: Signer, id: string, label: string, isAdmin: boolean) { return this.call(admin, "create_approver", { id, label, is_admin: isAdmin }); }
   setApproverStatus(admin: Signer, id: string, status: T.Status) { return this.call(admin, "set_approver_status", { id, status }); }
+  removeApprover(admin: Signer, id: string) { return this.call(admin, "remove_approver", { id }); }
   createAgent(admin: Signer, a: { id: string; label: string; owner: string; runtime: string }) { return this.call(admin, "create_agent", a); }
   setAgentStatus(admin: Signer, id: string, status: T.Status) { return this.call(admin, "set_agent_status", { id, status }); }
   createResource(admin: Signer, r: { id: string; label: string; environment: string; tags: string[]; services: string[] }) { return this.call(admin, "create_resource", r); }
