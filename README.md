@@ -1,5 +1,8 @@
 # Sudo by Contract
 
+[![live on NEAR testnet](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/live-hero.yml/badge.svg)](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/live-hero.yml)
+[![ci](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/ci.yml)
+
 **Give agents permission, not credentials.**
 
 An AI agent asks to restart one service on one server for ten minutes. A policy on NEAR
@@ -15,12 +18,12 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 
 | | |
 |---|---|
-| **Live site** | [sudo-by-contract.vercel.app](https://sudo-by-contract.vercel.app) — landing + console (simulated preview); [live testnet view](https://sudo-by-contract.vercel.app/#/console?contract=bagyard-sexton.testnet) of the real contract, read-only |
+| **Live site** | [sudo-by-contract.vercel.app](https://sudo-by-contract.vercel.app) — landing, [proof page](https://sudo-by-contract.vercel.app/#/proof), and the [console](https://sudo-by-contract.vercel.app/#/console) on the real testnet contract (read-only for visitors; a labelled interactive simulation is one click away) |
 | **Tracks** | AI Security & Defense · Open Innovation |
 | **Contract** | [`bagyard-sexton.testnet`](https://testnet.nearblocks.io/address/bagyard-sexton.testnet) (NEAR testnet) |
 | **MPC signer** | [`v1.signer-prod.testnet`](https://testnet.nearblocks.io/address/v1.signer-prod.testnet) (Chain Signatures, Ed25519 domain) |
 | **Production SSH CA** | `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICA7lQ5yFKYgWPJFZuI9RVDrWMKp6z/qtIgOw2AHU2qR` — derived by the MPC network for the contract; no private key exists |
-| **Live verification** | 22/22 checks against testnet: [docs/LIVE_RUN.md](docs/LIVE_RUN.md) |
+| **Live verification** | 22/22 checks against testnet: [docs/LIVE_RUN.md](docs/LIVE_RUN.md). Every 8 hours, unattended: [live-hero](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/live-hero.yml) boots `prod-web-02` (real OpenSSH + `sbc-gate`) on a GitHub runner and runs an agent against the deployed contract and MPC signer |
 
 ## Try it in two minutes
 
@@ -29,8 +32,9 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 | Open [sudo-by-contract.vercel.app](https://sudo-by-contract.vercel.app) → **Try to escape** | You hold one capability (restart `checkout-api`, once, 10 min). Type `sudo cat /etc/shadow`, `sudo -i`, `…; id`, `restart sshd`. Each layer decides in turn; the parser and the executed argv are the gate's real Rust code (`sbc-core`) compiled to WebAssembly. `0 escaped`. |
 | Open [/#/proof](https://sudo-by-contract.vercel.app/#/proof) | Your browser asks NEAR's MPC contract for the CA key, checks it matches what the policy contract uses, shows another account derives a different key, and verifies a real issued certificate's Ed25519 signature. **7/7 in ~2 s**, no account. |
 | `npm ci && npm run verify:live` | The same seven checks from a terminal, plus `ssh-keygen -L` (OpenSSH) accepting the MPC-signed certificate. No keys, no accounts. |
-| `cargo test --workspace` and `npm test` | 62 Rust tests (contract lifecycle with a simulated MPC callback, gate end-to-end against a signature-checking mock RPC, OpenSSH encoding) and 33 TypeScript tests. |
-| [Live console](https://sudo-by-contract.vercel.app/#/console?contract=bagyard-sexton.testnet) (read-only) | Real capabilities, denials and certificates from the testnet runs, straight from the contract. The default console is a labelled simulation of the hero scenario. |
+| Open the latest [live-hero run](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/live-hero.yml) | A real host on a GitHub runner: the agent asks for a 60-second status capability, the MPC network signs the certificate (~4 s), the command runs through the gate, and after the window closes **sshd itself** refuses the certificate. The job summary reads every capability back from the contract. |
+| `cargo test --workspace` and `npm test` | 71 Rust tests (contract lifecycle with a simulated MPC callback, gate end-to-end against a signature-checking mock RPC, OpenSSH encoding) and 34 TypeScript tests. |
+| [Console](https://sudo-by-contract.vercel.app/#/console) | Real capabilities, denials and certificates, read straight from the contract (test fixtures from the end-to-end run are one click away). **Try the simulation** opens a labelled sandbox where you can approve, deny and revoke. |
 
 | | Mechanism |
 |---|---|
@@ -46,11 +50,11 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 |---|---|
 | The NEAR MPC network can act as an OpenSSH CA | Read the MPC contract source (`sign` with `payload_v2.Eddsa`, ≤ 1232 bytes; standard Ed25519 verification against the derived key) and queried the live testnet signer: domain 1 = Frost/Ed25519, threshold 11. |
 | Our certificates are real OpenSSH certificates | `ssh-keygen -L` accepts certificates built by `sbc-core` (the code the contract runs); a single flipped bit is rejected with `incorrect signature`; re-encoding an `ssh-keygen -s` certificate reproduces its signed bytes exactly (`crates/sbc-core/examples/interop.rs`). |
-| Policy, approvals, signing, consume, expiry, revocation, host binding, admin quorum | 28 contract tests with a simulated MPC callback carrying real Ed25519 signatures (`contracts/sbc-policy/src/tests.rs`). |
-| The gate enforces it | 8 unit + 5 end-to-end gate tests against a mock NEAR RPC that verifies every transaction signature: hero sequence, independent certificate checks, host ceiling, serial 0, fail-closed (`crates/sbc-gate/tests/exec_flow.rs`). |
+| Policy, approvals, signing, consume, expiry, revocation, host binding, admin quorum, identity removal | 32 contract tests with a simulated MPC callback carrying real Ed25519 signatures (`contracts/sbc-policy/src/tests.rs`). |
+| The gate enforces it | 9 unit + 9 integration gate tests against mock NEAR RPCs that verify every transaction signature: hero sequence, independent certificate checks, host ceiling, serial 0, fail-closed, re-provisioning from an enrolled key (`crates/sbc-gate/tests/`). |
 | Revocation reaches sshd | KRL produced from revoked serials makes `ssh-keygen -Q` report `REVOKED`. |
 | No wallet needed | Hand-written borsh transactions match `@near-js/transactions` byte-for-byte; WebCrypto Ed25519 signing in browser and Node. |
-| SDK, CLI, relay, MCP | 33 offline tests; `tsc` clean. |
+| SDK, CLI, relay, MCP | 34 offline tests; `tsc` clean. |
 | Live testnet end-to-end | **22/22** with `scripts/e2e-testnet.ts`: the testnet MPC network signed the certificate 6.7 s after approval, `ssh-keygen` verified it, and the real gate binary enforced scope, single use, revocation (→ KRL) and expiry through the deployed contract. The first live run caught two bugs the offline tests missed; both are fixed ([docs/LIVE_RUN.md](docs/LIVE_RUN.md)). |
 | Real sshd | **14/14** in CI on Linux (`sandbox/ci/sshd-integration.sh`): OpenSSH with the generated config and the real gate executes the approved restart; denies `cat /etc/shadow`, out-of-scope, second use and injected commands; refuses shells, PTYs and port forwarding; and sshd itself rejects expired, wrong-host, revoked and certificate-less logins. |
 

@@ -7,8 +7,12 @@ name: live-hero
 #   * the Deploy Agent asking for one restart, and a human approving it from
 #     the console while the run waits.
 #
-# Manual only (never on pull requests, so the scoped testnet keys in this
-# repository's secrets are never exposed to forks):
+# Every 8 hours it also runs unattended: the independent deployment check
+# (npm run verify:live) and the auto-approved 60-second scenario, so the
+# README badge shows whether the live deployment works right now.
+#
+# Never on pull requests, so the scoped testnet keys in this repository's
+# secrets are never exposed to forks:
 #   SBC_GATE_KEY   prod-web-02's gate key file (can call consume/heartbeat/report_denial)
 #   SBC_AGENT_KEY  deploy-agent's key (can call request_access/cancel_request)
 
@@ -20,6 +24,8 @@ on:
         type: choice
         default: full
         options: [full, restart, expiry]
+  schedule:
+    - cron: "23 */8 * * *"
 
 concurrency:
   group: live-hero
@@ -39,8 +45,16 @@ jobs:
       SBC_CONSOLE_URL: https://sudo-by-contract.vercel.app
       FORCE_COLOR: "1"
       COMPOSE: docker compose -f sandbox/docker-compose.yml --profile agent
+      # scheduled runs have no inputs: they run the scenario that needs no human
+      SCENARIO: ${{ inputs.scenario || 'expiry' }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Independent check — MPC-derived CA, contract binding, a real certificate (no keys)
+        run: node scripts/verify-live.ts
 
       - name: Check secrets
         env:
@@ -78,7 +92,7 @@ jobs:
         env:
           SBC_AGENT_KEY: ${{ secrets.SBC_AGENT_KEY }}
         # --no-deps: leave the running host and relay exactly as booted
-        run: $COMPOSE run --rm --no-deps -T agent --scenario "${{ inputs.scenario }}"
+        run: $COMPOSE run --rm --no-deps -T agent --scenario "$SCENARIO"
 
       - name: What prod-web-02 saw
         if: always()
@@ -90,10 +104,6 @@ jobs:
 
       - name: Summary (read back from the contract)
         if: always()
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - if: always()
         run: node scripts/hero-summary.ts --since "${STARTED_MS:-0}" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Tear down
