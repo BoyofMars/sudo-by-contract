@@ -45,21 +45,28 @@ export function formatCountdown(ms: number): string {
   return h ? `${h}:${mm}:${sss}` : `${mm}:${sss}`;
 }
 
+/** "a", "a or b", "a, b or c" */
+function joinOr(items: string[], word = "or"): string {
+  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} ${word} ${items[items.length - 1]}`;
+}
+
+// The contract's `describe_policy` view phrases denies as "may never"; the
+// console uses this wording.
 export function describePolicy(p: Policy | PolicyInput, labels: { agent?: (id: string) => string } = {}): string {
   const name = labels.agent ?? ((x: string) => x);
-  const who = p.subjects.all_agents ? "Any registered agent" : p.subjects.agents.map(name).join(", ");
-  const what = p.actions
-    .map((r) => {
+  const who = p.subjects.all_agents ? "Any registered agent" : joinOr(p.subjects.agents.map(name));
+  const what = joinOr(
+    p.actions.map((r) => {
       const v = ACTION_VERBS[r.kind]?.verb ?? "act on";
-      return r.targets.includes("*") ? `${v} any enrolled service` : `${v} ${r.targets.join(", ")}`;
-    })
-    .join("; ");
-  const where = [
+      return r.targets.includes("*") ? `${v} any enrolled service` : `${v} ${joinOr(r.targets)}`;
+    }),
+  );
+  const where = joinOr([
     ...p.resources.ids,
     ...p.resources.environments.map((e) => `${e} servers`),
     ...p.resources.tags.map((t) => `servers tagged ${t}`),
-  ].join(", ");
-  if (p.effect === "Deny") return `${who} may never ${what} on ${where}.`;
+  ]);
+  if (p.effect === "Deny") return p.subjects.all_agents ? `No agent may ${what} on ${where}.` : `${who} may not ${what} on ${where}.`;
   const uses = p.max_uses === 1 ? "once" : `up to ${p.max_uses} times`;
   const appr =
     p.approval.required === 0
@@ -90,7 +97,8 @@ export const STATE_TONE: Record<RequestState, Tone> = {
   PendingApproval: "pending",
   Signing: "pending",
   Active: "active",
-  Exhausted: "success",
+  // closed capabilities are gray; teal means live authority
+  Exhausted: "muted",
   Expired: "muted",
   Revoked: "danger",
   Denied: "danger",

@@ -57,7 +57,13 @@ export function useAction() {
 
 export type ThemePref = "system" | "light" | "dark";
 
-export function useTheme(): [ThemePref, (t: ThemePref) => void] {
+/**
+ * [stored preference, setter, the theme actually shown]. Toggles should flip
+ * the theme actually shown: with the preference at "system" on a dark OS,
+ * setting "dark" would change nothing on screen.
+ */
+export function useTheme(): [ThemePref, (t: ThemePref) => void, "light" | "dark"] {
+  const systemDark = useMediaQuery("(prefers-color-scheme: dark)");
   const [pref, setPref] = useState<ThemePref>(() => {
     try {
       const t = localStorage.getItem("sbc.theme");
@@ -77,7 +83,7 @@ export function useTheme(): [ThemePref, (t: ThemePref) => void] {
       /* ignore */
     }
   }, [pref]);
-  return [pref, setPref];
+  return [pref, setPref, pref === "system" ? (systemDark ? "dark" : "light") : pref];
 }
 
 export function useMediaQuery(q: string) {

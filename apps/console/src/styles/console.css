@@ -155,14 +155,20 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.lb-fx {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.lb-sim {
   margin-left: auto;
   white-space: nowrap;
 }
-.lb-sim {
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  white-space: nowrap;
+  cursor: pointer;
+}
+td.nowrap,
+.table td.mono {
   white-space: nowrap;
 }
 .fixture-tag {
@@ -874,6 +880,11 @@
   gap: 10px;
   align-items: flex-start;
   margin-bottom: 14px;
+}
+.status-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .status-remaining {
   display: flex;

@@ -338,12 +338,14 @@
   min-width: 0;
   margin: 6px 0;
 }
+/* an exact command never breaks mid-token: it scrolls instead */
 .cmd pre {
   margin: 0;
   flex: 1;
   min-width: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  white-space: pre;
+  overflow-x: auto;
+  scrollbar-width: thin;
   font-size: var(--t-13);
   line-height: 1.55;
 }
@@ -391,6 +393,14 @@
   border-radius: var(--r-3);
   background: var(--surface);
   overflow-x: auto;
+  /* secondary columns hide by the table's own width, not the window's
+     (the sidebar takes 232 px of the window) */
+  container-type: inline-size;
+}
+@container (max-width: 860px) {
+  .table .hide-md {
+    display: none;
+  }
 }
 .panel .table-wrap {
   border: 0;
@@ -435,7 +445,7 @@
   color: var(--text-3);
   font-size: var(--t-12);
   margin-top: 2px;
-  max-width: 420px;
+  max-width: min(380px, 25vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -30,6 +30,7 @@ h4 {
   font-weight: 600;
   letter-spacing: -0.012em;
   line-height: 1.2;
+  text-wrap: balance;
 }
 
 p {

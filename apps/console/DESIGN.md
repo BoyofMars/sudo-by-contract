@@ -42,7 +42,7 @@ the certificate is issued"). Closed capabilities turn gray. No padlocks.
 |---|---|---|---|
 | `--bg` / `--surface` / `--surface-2/3` | #fafaf9 / #fff / … | #0b0c0e / #111215 / … | page, panels, wells |
 | `--line` / `--line-strong` | #e6e5e1 / #d4d3cd | #23252b / #30333a | hairlines, inputs |
-| `--text` / `-2` / `-3` | #16171a / #53555c / #8a8c93 | #ececee / #a3a6ae / #6d7079 | primary, secondary, tertiary |
+| `--text` / `-2` / `-3` | #16171a / #53555c / #6b6d74 | #ececee / #a3a6ae / #8b8e97 | primary, secondary, tertiary (all ≥ 4.5:1 on their background) |
 | `--ink` | text color | text color | primary buttons, selected chips |
 | `--active` (+ `-bg`, `-line`) | #0a8572 | #3cc9b0 | live authority, allowed, approve |
 | `--pending` | #9a6208 | #eeb54f | awaiting approval, signing |
