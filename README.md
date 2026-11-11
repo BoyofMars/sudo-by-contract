@@ -31,6 +31,7 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 |---|---|
 | Open [sudo-by-contract.vercel.app](https://sudo-by-contract.vercel.app) → **Try to escape** | You hold one capability (restart `checkout-api`, once, 10 min). Type `sudo cat /etc/shadow`, `sudo -i`, `…; id`, `restart sshd`. Each layer decides in turn; the parser and the executed argv are the gate's real Rust code (`sbc-core`) compiled to WebAssembly. `0 escaped`. |
 | Open [/#/proof](https://sudo-by-contract.vercel.app/#/proof) | Your browser asks NEAR's MPC contract for the CA key, checks it matches what the policy contract uses, shows another account derives a different key, and verifies a real issued certificate's Ed25519 signature. **7/7 in ~2 s**, no account. |
+| `npm ci && npm run judge` | Everything that can run from a clone, in one command: the Rust and TypeScript test suites and the live testnet check, printed as each claim next to its evidence. `npm run judge -- --offline` skips the network. Needs Node ≥ 23.6 (`.nvmrc`) and Rust (`rust-toolchain.toml`). |
 | `npm ci && npm run verify:live` | The same seven checks from a terminal, plus `ssh-keygen -L` (OpenSSH) accepting the MPC-signed certificate. No keys, no accounts. |
 | Open the latest [live-hero run](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/live-hero.yml) | A real host on a GitHub runner: the agent asks for a 60-second status capability, the MPC network signs the certificate (~4 s), the command runs through the gate, and after the window closes **sshd itself** refuses the certificate. The job summary reads every capability back from the contract. |
 | `cargo test --workspace` and `npm test` | 71 Rust tests (contract lifecycle with a simulated MPC callback, gate end-to-end against a signature-checking mock RPC, OpenSSH encoding) and 34 TypeScript tests. |
@@ -77,15 +78,13 @@ So the agent's key can only ask. It cannot approve its own request, cannot reach
 | Live testnet end-to-end | **22/22** with `scripts/e2e-testnet.ts`: the testnet MPC network signed the certificate 6.7 s after approval, `ssh-keygen` verified it, and the real gate binary enforced scope, single use, revocation (→ KRL) and expiry through the deployed contract. The first live run caught two bugs the offline tests missed; both are fixed ([docs/LIVE_RUN.md](docs/LIVE_RUN.md)). |
 | Real sshd | **14/14** in CI on Linux (`sandbox/ci/sshd-integration.sh`): OpenSSH with the generated config and the real gate executes the approved restart; denies `cat /etc/shadow`, out-of-scope, second use and injected commands; refuses shells, PTYs and port forwarding; and sshd itself rejects expired, wrong-host, revoked and certificate-less logins. |
 
-Run everything that runs offline:
+Run all of it, with each claim printed next to its result:
 
 ```bash
-cargo test --workspace
+npm ci && npm run judge
 ```
 
-```bash
-npm test
-```
+Or the suites on their own: `cargo test --workspace` and `npm test`.
 
 ## Repository
 

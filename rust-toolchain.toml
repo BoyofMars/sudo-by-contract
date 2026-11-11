@@ -1,0 +1,5 @@
+# The compiler this repository is built and tested with (rustup installs it on first use).
+[toolchain]
+channel = "1.99"
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"
