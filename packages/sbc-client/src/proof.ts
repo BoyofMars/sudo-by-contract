@@ -6,7 +6,7 @@
 
 import { SudoContract } from "./contract.ts";
 import { b64decode, equalBytes } from "./encoding.ts";
-import { publicKeyFromString, verify } from "./keys.ts";
+import { publicKeyFromString, publicKeyToString, verify } from "./keys.ts";
 import { NearRpc } from "./near.ts";
 import { parseCertificateLine, sshPublicKeyLine, type CertSummary } from "./ssh.ts";
 import type { AccessRequest } from "./types.ts";
@@ -51,6 +51,30 @@ function short(s: string, n = 10): string {
 function fmtTime(unix: number): string {
   return new Date(unix * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC";
 }
+
+function fmtDur(secs: number): string {
+  return secs >= 120 && secs % 60 === 0 ? `${secs / 60} min` : `${secs} s`;
+}
+
+/** Event kinds in words, for the one-line timeline. */
+const STEP_WORD: Record<string, string> = {
+  request_created: "requested",
+  policy_evaluated: "policy checked",
+  approval_granted: "approved",
+  approval_denied: "denied",
+  credential_signing: "MPC signing",
+  credential_issued: "certificate issued",
+  credential_failed: "issuance failed",
+  command_allowed: "command allowed",
+  command_denied: "command denied",
+  authorization_used: "used up",
+  authorization_expired: "expired",
+  authorization_revoked: "revoked",
+  authorization_released: "released",
+};
+
+/** Any account other than the contract; derivation is bound to the caller. */
+const OTHER_ACCOUNT = "alice.testnet";
 
 /** Signed prefix and signature of an Ed25519 user certificate blob. */
 function splitSignature(blob: Uint8Array): { signed: Uint8Array; signature: Uint8Array } {
@@ -123,7 +147,7 @@ export async function verifyDeployment(opts: {
     report.threshold = threshold;
     s.detail = `Any ${threshold} of ${participants} independent nodes must cooperate to sign. No node holds the key.`;
     s.facts = [
-      ["Protocol", `${domain.protocol} threshold Ed25519`],
+      ["Protocol", `${String(domain.protocol).toUpperCase()} threshold Ed25519`],
       ["Quorum", `${threshold} of ${participants}`],
       ["Operators", (run.parameters?.participants?.participants ?? []).slice(0, 4).map((p: any) => p[0]).join(", ") + (participants > 4 ? ", …" : "")],
     ];
@@ -138,26 +162,27 @@ export async function verifyDeployment(opts: {
     });
     const mpcRaw = publicKeyFromString(derived);
     if (!equalBytes(mpcRaw, caRaw)) throw new Error(`MPC derives ${derived}, but the contract's CA differs`);
-    s.detail = `derived_public_key(${env.path}, ${opts.contractId}) = the CA in TrustedUserCAKeys`;
+    s.detail = `derived_public_key(${env.path}, ${opts.contractId}) is exactly the CA key the contract signs with and the servers trust.`;
     s.facts = [
       ["Derived by MPC", short(derived, 14)],
-      ["TrustedUserCAKeys", short(sshPublicKeyLine(caRaw), 18)],
+      ["Contract's CA", `${short(publicKeyToString(caRaw), 14)}  ✓ identical`],
+      ["Same key for sshd", short(sshPublicKeyLine(caRaw), 18)],
     ];
   });
 
   await step("binding", async (s) => {
     if (!overview || !env || !caRaw) throw new Error("skipped: contract unavailable");
-    const other = "someone-else.testnet";
+    const other = OTHER_ACCOUNT;
     const derived = await rpc.view<string>(overview.config.mpc_contract, "derived_public_key", {
       path: env.path,
       predecessor: other,
       domain_id: overview.config.mpc_domain_id,
     });
     if (equalBytes(publicKeyFromString(derived), caRaw)) throw new Error("another account derives the same key");
-    s.detail = `Same path from ${other} → a different key. Derivation is bound to the calling account, so only ${opts.contractId}'s code can ask for signatures with this CA.`;
+    s.detail = `The same path asked for by any other account (here ${other}) gives a different key. Derivation is bound to the calling account, so only ${opts.contractId}'s code can ask for signatures with this CA.`;
     s.facts = [
-      [opts.contractId, short(sshPublicKeyLine(caRaw).split(" ")[1], 14)],
-      [other, short(derived, 14)],
+      [opts.contractId, short(publicKeyToString(caRaw), 14)],
+      [other, `${short(derived, 14)}  ≠ different`],
     ];
   });
 
@@ -177,7 +202,7 @@ export async function verifyDeployment(opts: {
     s.detail = `Capability #${req.id} · serial ${cert.serial} · ${signed.length}-byte body signed by the MPC network, verified here with Ed25519.`;
     s.facts = [
       ["Capability", `#${req.id} — ${req.action} on ${req.resource_id}`],
-      ["Serial", String(cert.serial)],
+      ["Serial", `${cert.serial} (capability number + 1: a revocation list cannot name serial 0)`],
       ["Signature", `${Array.from(signature.subarray(0, 8), (b) => b.toString(16).padStart(2, "0")).join("")}… ✓`],
     ];
   });
@@ -190,7 +215,8 @@ export async function verifyDeployment(opts: {
     if (!fc) throw new Error("no force-command");
     if (cert.extensions.length) throw new Error(`grants extensions: ${cert.extensions.join(", ")}`);
     if (window > 24 * 3600) throw new Error(`window is ${window}s`);
-    s.detail = `Valid ${Math.round(window / 60)} min for ${cert.principals[0]} only, forced through ${fc}, no extensions.`;
+    const skew = Math.max(0, window - req.granted_duration_secs);
+    s.detail = `Valid for the approved ${fmtDur(req.granted_duration_secs)} window${skew ? ` (it starts ${skew} s early to absorb clock skew)` : ""}, for ${cert.principals[0]} only, forced through ${fc}, no extensions.`;
     s.facts = [
       ["Principal", cert.principals[0]],
       ["Valid", `${fmtTime(cert.validAfter)} → ${fmtTime(cert.validBefore)}`],
@@ -208,7 +234,7 @@ export async function verifyDeployment(opts: {
     s.detail = `${req.events.length} events for capability #${req.id}; state ${req.state}, ${req.uses}/${req.max_uses} uses, ${req.denied_attempts} denied attempts.`;
     s.facts = [
       ["Policy", `${req.policy_id} v${req.policy_version} · ${short(req.policy_hash ?? "", 8)}`],
-      ["Timeline", kinds.join(" → ")],
+      ["Timeline", kinds.map((k) => STEP_WORD[k] ?? k.replace(/_/g, " ")).join(" → ")],
     ];
   });
 

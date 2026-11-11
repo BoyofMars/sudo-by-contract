@@ -470,6 +470,10 @@
   margin-top: 3px;
   color: var(--active);
 }
+.esc-foot > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .esc-err {
   color: var(--danger);
 }
@@ -600,10 +604,35 @@
 .l-links .l-link {
   white-space: nowrap;
 }
-@media (max-width: 1120px) {
+@media (max-width: 900px) {
   .l-links {
     display: none;
   }
+}
+
+/* footer links, final call-to-action note, linked proof point, audit scope */
+.l-foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.l-foot-links a {
+  color: var(--text-2);
+  text-decoration: none;
+}
+.l-foot-links a:hover {
+  color: var(--text);
+}
+.l-final-note {
+  margin-top: 18px;
+}
+.hero-proof a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.audit-scope {
+  margin: -6px 0 12px;
+  line-height: 1.55;
 }
 @media (max-width: 640px) {
   .esc-term .term-title {

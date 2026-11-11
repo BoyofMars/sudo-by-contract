@@ -329,7 +329,7 @@ export function EscapePlayground() {
               </dl>
             </div>
           ) : (
-            <p className="esc-hint small muted">The authorised command is <button type="button" className="esc-link mono" onClick={() => void run(LEGIT)}>{LEGIT}</button>. It works once.</p>
+            <p className="esc-hint small muted">The authorized command is <button type="button" className="esc-link mono" onClick={() => void run(LEGIT)}>{LEGIT}</button>. It works once.</p>
           )}
         </div>
       </div>
@@ -347,8 +347,11 @@ export function EscapePlayground() {
       </div>
 
       <p className="esc-foot small muted">
-        <Icon name="shield" size={13} /> The parser, the redaction and the argv come from <code>sbc-core</code>, the crate inside <code>sbc-gate</code> on every enrolled host, compiled to WebAssembly and running in this tab. The sshd and <code>consume()</code> layers are mirrored here; on a real host they are OpenSSH and a NEAR transaction.
-        {loadError ? <span className="esc-err"> Gate failed to load: {loadError}</span> : null}
+        <Icon name="shield" size={13} />
+        <span>
+          The parser, the redaction and the argv come from <code>sbc-core</code>, the crate inside <code>sbc-gate</code> on every enrolled host, compiled to WebAssembly and running in this tab. The sshd and <code>consume()</code> layers are mirrored here; on a real host they are OpenSSH and a NEAR transaction.
+          {loadError ? <span className="esc-err"> Gate failed to load: {loadError}</span> : null}
+        </span>
       </p>
     </div>
   );

@@ -35,6 +35,8 @@ const CMP: { row: string; cells: string[] }[] = [
   { row: "Maturity", cells: ["Battle-tested", "Battle-tested", "Production-ready", "Early: SSH first; Kubernetes and cloud adapters next"] },
 ];
 
+const REPO = "https://github.com/BoyofMars/sudo-by-contract";
+
 /** Set at build time for hosted deployments (e.g. VITE_SBC_LIVE_CONTRACT=bagyard-sexton.testnet). */
 const LIVE_CONTRACT = (import.meta.env.VITE_SBC_LIVE_CONTRACT as string | undefined)?.trim() || null;
 
@@ -44,7 +46,7 @@ const SNIPPETS: Record<string, string> = {
 request #1042 · awaiting approval (production-service-remediation)
 
 $ sudoctl wait 1042
-✓ approved by tobi · certificate serial 1042 · valid 10m · 1 use
+✓ approved by tobi · certificate serial 1043 · valid 10m · 1 use
 
 $ sudoctl exec 1042 -- sudo systemctl restart checkout-api
 ✓ allowed · service.restart:checkout-api · use 1/1`,
@@ -77,7 +79,7 @@ await cap.release();                       // authority ends now`,
 const SECTIONS = ["problem", "flow", "enforcement", "escape", "no-key", "compare", "developers"];
 
 export function Landing() {
-  const [theme, setTheme] = useTheme();
+  const [, setTheme, theme] = useTheme();
   const [tab, setTab] = useState<keyof typeof SNIPPETS>("CLI");
   useEffect(() => {
     const target = window.location.hash.replace(/^#\/?/, "").split("?")[0];
@@ -91,14 +93,13 @@ export function Landing() {
         <a className="brand" href="#/"><Mark size={20} /><span>Sudo by Contract</span></a>
         <nav className="l-links">
           <button onClick={() => go("flow")}>How it works</button>
-          <button onClick={() => go("enforcement")}>Enforcement</button>
           <button onClick={() => go("escape")}>Try to escape</button>
-          <button onClick={() => go("no-key")}>No master key</button>
           <a className="l-link" href="#/proof">Verify live</a>
           <button onClick={() => go("compare")}>Compare</button>
           <button onClick={() => go("developers")}>Developers</button>
         </nav>
         <div className="l-nav-right">
+          <a className="btn btn-ghost hide-sm" href={REPO} target="_blank" rel="noreferrer">GitHub <Icon name="external" size={12} /></a>
           <button className="btn btn-ghost btn-icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
             <Icon name={theme === "dark" ? "sun" : "moon"} />
           </button>
@@ -128,7 +129,7 @@ export function Landing() {
             <li>Typed action adapters</li>
             <li>NEAR threshold signing</li>
             <li>Hash-chained audit</li>
-            <li>22/22 live on testnet</li>
+            <li><a href={`${REPO}/actions/workflows/live-hero.yml`} target="_blank" rel="noreferrer">Runs on testnet every 8 h ↗</a></li>
           </ul>
         </div>
         <HeroTerminal />
@@ -215,8 +216,8 @@ export function Landing() {
             <pre className="code-block">{`Type: ssh-ed25519-cert-v01@openssh.com user certificate
 Signing CA: ED25519 SHA256:E9Jz…QmU  (MPC-derived for the contract)
 Key ID: "sbc cap=1042 agent=deploy-agent res=prod-web-02"
-Serial: 1042
-Valid: from 14:02:11 to 14:12:11
+Serial: 1043
+Valid: from 14:01:11 to 14:12:11
 Principals:
         sbc-prod-web-02
 Critical Options:
@@ -314,13 +315,22 @@ Extensions: (none)`}</pre>
         <h2>Ten minutes. One command. No permanent key.</h2>
         <div className="hero-cta">
           <a className="btn btn-primary btn-lg" href="#/console">Open the console</a>
-          <span className="muted mono small">or run the sandbox: <span className="kbd">docker compose -f sandbox/docker-compose.yml up --build</span></span>
+          <a className="btn btn-secondary btn-lg" href={REPO} target="_blank" rel="noreferrer">Read the code <Icon name="external" size={13} /></a>
         </div>
+        <p className="muted small l-final-note">
+          Check everything from a clone: <span className="kbd">npm ci &amp;&amp; npm run judge</span> runs the test suites and the live testnet check.
+        </p>
       </section>
 
       <footer className="l-foot">
         <span><Mark size={16} /> Sudo by Contract</span>
-        <span className="muted">A prototype built on NEAR. Read the threat model for what it does — and does not — defend against.</span>
+        <nav className="l-foot-links">
+          <a href={REPO} target="_blank" rel="noreferrer">GitHub</a>
+          <a href={`${REPO}/blob/main/docs/THREAT_MODEL.md`} target="_blank" rel="noreferrer">Threat model</a>
+          <a href={`${REPO}/blob/main/docs/ARCHITECTURE.md`} target="_blank" rel="noreferrer">Architecture</a>
+          <a href="#/proof">Verify live</a>
+        </nav>
+        <span className="muted">Built at NEAR HACKATHON, November 2026. MIT licensed.</span>
       </footer>
     </div>
   );

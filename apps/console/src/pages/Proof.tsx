@@ -13,6 +13,7 @@ import { useTheme } from "../lib/hooks.ts";
 
 const LIVE_CONTRACT = (import.meta.env.VITE_SBC_LIVE_CONTRACT as string | undefined)?.trim() || "bagyard-sexton.testnet";
 const EXPLORER = "https://testnet.nearblocks.io";
+const REPO = "https://github.com/BoyofMars/sudo-by-contract";
 
 function iso(unix: number) {
   return new Date(unix * 1000).toISOString().replace(".000Z", "Z");
@@ -25,7 +26,7 @@ function StepMark({ status }: { status: ProofStep["status"] }) {
 }
 
 export function Proof({ query }: { query: URLSearchParams }) {
-  const [theme, setTheme] = useTheme();
+  const [, setTheme, theme] = useTheme();
   const contractId = (query.get("contract") || LIVE_CONTRACT).trim();
   const rpcUrl = resolveConfig().rpcUrl;
   const [steps, setSteps] = useState<ProofStep[]>([]);
@@ -178,12 +179,14 @@ Extensions: ${cert.summary.extensions.length ? cert.summary.extensions.join(", "
 
             <div className="pf-card">
               <span className="eyebrow">Run it in your terminal</span>
-              <p className="small muted">Same checks, plus OpenSSH's own <code>ssh-keygen</code> as a second opinion. No keys or accounts needed.</p>
-              <Command>{"npm run verify:live"}</Command>
+              <p className="small muted">Same checks, plus OpenSSH's own <code>ssh-keygen</code> as a second opinion. Node 24 or newer; no keys or accounts needed.</p>
+              <Command>{`git clone ${REPO}`}</Command>
+              <Command>{"cd sudo-by-contract && npm run verify:live"}</Command>
             </div>
 
             <div className="pf-card pf-links">
-              <span className="eyebrow">On the explorer</span>
+              <span className="eyebrow">Check it yourself</span>
+              <a href={REPO} target="_blank" rel="noreferrer">Source code <span className="mono">BoyofMars/sudo-by-contract</span> <Icon name="external" size={12} /></a>
               <a href={`${EXPLORER}/address/${contractId}`} target="_blank" rel="noreferrer">Policy contract <span className="mono">{contractId}</span> <Icon name="external" size={12} /></a>
               {report?.mpcContract ? (
                 <a href={`${EXPLORER}/address/${report.mpcContract}`} target="_blank" rel="noreferrer">MPC signer <span className="mono">{report.mpcContract}</span> <Icon name="external" size={12} /></a>
