@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EscapePlayground } from "../components/EscapePlayground.tsx";
 import { HeroTerminal } from "../components/HeroTerminal.tsx";
 import { Icon, Mark } from "../components/Icon.tsx";
@@ -73,9 +73,18 @@ await cap.release();                       // authority ends now`,
 // action, and release it. It never sees a long-lived credential.`,
 };
 
+/** `#/escape`, `#/no-key`, … open the landing page at that section (shareable deep links). */
+const SECTIONS = ["problem", "flow", "enforcement", "escape", "no-key", "compare", "developers"];
+
 export function Landing() {
   const [theme, setTheme] = useTheme();
   const [tab, setTab] = useState<keyof typeof SNIPPETS>("CLI");
+  useEffect(() => {
+    const target = window.location.hash.replace(/^#\/?/, "").split("?")[0];
+    if (!SECTIONS.includes(target)) return;
+    const t = window.setTimeout(() => document.getElementById(target)?.scrollIntoView({ block: "start" }), 60);
+    return () => window.clearTimeout(t);
+  }, []);
   return (
     <div className="landing">
       <header className="l-nav">

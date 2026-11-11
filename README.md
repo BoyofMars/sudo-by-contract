@@ -44,6 +44,25 @@ Request → Evaluate → Approve → Issue → Execute → Observe → Expire
 | **Auditable** | Policy versions + hashes, approvals, issuance, every allowed and denied command — on-chain, hash-chained. Private evidence stays off-chain, committed by hash. |
 | **Agent-native** | SDK, CLI and an MCP server: agents request capabilities with a reason and evidence; humans approve exactly what will run. |
 
+## What each key can do
+
+Every identity is a NEAR function-call access key on the contract account. The NEAR protocol itself refuses any call outside a key's method list, and a key can spend only its gas allowance: none can transfer funds, deploy code or add keys. The contract then checks which identity the key is bound to.
+
+| Role | Held by | Can call | Gas allowance |
+|---|---|---|---|
+| Agent | the AI agent | `request_access`, `cancel_request` | 1 NEAR |
+| Approver | a person's phone or browser (non-extractable WebCrypto key) | `approve`, `deny`, `revoke` | 1 NEAR |
+| Admin | a person's device | policy, identity and resource management; `approve`, `deny`, `revoke` | 2 NEAR |
+| Gate | `sbc-gate` on one host | `consume`, `report_denial`, `heartbeat` | 2 NEAR |
+| Enrollment | a one-time join link (expires within 7 days) | `complete_enrollment`, which swaps it for the real key | 0.25 NEAR |
+
+So the agent's key can only ask. It cannot approve its own request, cannot reach a host, and cannot obtain a certificate except through a request a policy and a person have approved.
+
+## Fit with the tracks
+
+* **AI Security & Defense.** The track asks for policy engines, sandboxed keys and limits on what an agent can do. Here the policy engine is the contract, the sandboxed keys are the function-call keys above, and each capability is limited to one typed action on one host, N uses, and a time window. Out-of-scope attempts are refused by sshd, the gate and the contract, and recorded on-chain (try them in the [escape playground](https://sudo-by-contract.vercel.app/#/escape)).
+* **Open Innovation.** NEAR Chain Signatures used as an OpenSSH certificate authority: the MPC network signs Ed25519 certificate bodies that the contract builds from approved requests. No CA private key exists, and the rules for what gets signed are public contract code anyone can audit.
+
 ## What is verified, and how
 
 | Claim | Evidence |
@@ -90,7 +109,8 @@ npm test
 ## Hackathon
 
 * Built at **NEAR HACKATHON** (November 2026) for **AI Security & Defense** and **Open Innovation**.
-* **All code in this repository was written during the hackathon** (first commit 2026-11-10). There is no pre-existing code.
+* **All code in this repository was written during the hackathon** (first commit 2026-11-10). There is no pre-existing code, starter template or boilerplate.
+* **Built with:** Rust: `near-sdk` 5.30 (contract); `ed25519-dalek`, `sha2`, `base64`, `bs58`, `hex`, `serde`/`serde_json`, `toml`, `ureq` (gate). TypeScript on Node 26 with no runtime npm dependencies: borsh, NEAR transactions and OpenSSH encoding are hand-written (`@near-js/crypto` and `@near-js/transactions` are dev-only, used to check our bytes match). Console: React 19, Vite 8, Inter and JetBrains Mono via Fontsource. Tooling: `cargo-near`, `near-cli-rs`, OpenSSH, Docker, GitHub Actions, Vercel.
 * **NEAR integration:** the policy contract runs on NEAR testnet; **NEAR Chain Signatures** (MPC, Ed25519 domain) is the SSH certificate authority, with the CA key derived for the contract's account; **function-call access keys** on the contract account are the identity layer for admins, approvers, agents and hosts; every authorisation event is a NEP-297 event in a hash-chained, on-chain audit log.
 * The author's other, independent submission is **[Necropolis](https://github.com/BoyofMars/necropolis)** — a graveyard for dead memecoins on Solana and Base, with burials verified by NEAR's MPC network.
 
