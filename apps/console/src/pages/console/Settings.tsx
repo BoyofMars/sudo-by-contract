@@ -6,6 +6,7 @@ import { useData, useQuery } from "../../lib/data/context.tsx";
 import { useAction, useIsAdmin } from "../../lib/hooks.ts";
 import { clearConfig, resolveConfig, saveConfig } from "../../lib/config.ts";
 import type { EnrollmentToken } from "../../lib/data/source.ts";
+import { dateTime } from "../../lib/events.ts";
 
 export function Settings() {
   const { source, identity, reloadIdentity } = useData();
@@ -35,7 +36,7 @@ export function Settings() {
 
   return (
     <div className="page">
-      <PageHeader title="Settings" />
+      <PageHeader title="Settings" subtitle="Which contract this console reads, this browser's device key, and each environment's certificate authority." />
 
       <Panel title="Connection">
         <form className="form" onSubmit={(e) => { e.preventDefault(); apply(); }}>
@@ -51,7 +52,7 @@ export function Settings() {
             </Field>
           </div>
           <div className="form-actions">
-            {source.mode === "live" ? <button type="button" className="btn btn-secondary" onClick={() => { clearConfig(); window.location.href = window.location.pathname + "#/console?preview=1"; window.location.reload(); }}>Use preview</button> : null}
+            {source.mode === "live" ? <button type="button" className="btn btn-secondary" onClick={() => { window.location.href = window.location.pathname + "#/console?preview=1"; }}>Try simulation</button> : null}
             <button className="btn btn-primary">Save & reconnect</button>
           </div>
         </form>
@@ -79,20 +80,22 @@ export function Settings() {
             </div>
           </>
         ) : (
-          <p className="quiet-note">This browser has no device key for <span className="mono">{source.contractId}</span>. Ask an admin for an enrollment link (<span className="mono">#/join?token=…</span>) to approve or administer from here. Everything is still readable.</p>
+          <p className="quiet-note">This browser has no device key for <span className="mono">{source.contractId}</span>, so it can read everything but change nothing. To approve from here, open a one-time join link from an admin.</p>
         )}
       </Panel>
 
-      <Panel title="Notifications">
-        <p className="small muted">
-          With the console open, approval requests arrive instantly over the relay's event stream and raise a browser notification. Push while closed is designed for the relay's Web Push sender (VAPID) and Slack/webhook cards; see <span className="mono">apps/console/DESIGN.md</span>.
-        </p>
-        <div className="form-actions">
-          {notif === "unsupported" ? <span className="muted">Not supported in this browser.</span> : notif === "granted" ? <Badge tone="active">Enabled</Badge> : (
-            <button className="btn btn-secondary" onClick={async () => setNotif(await Notification.requestPermission())}><Icon name="bell" size={14} /> Enable browser notifications</button>
-          )}
-        </div>
-      </Panel>
+      {source.mode === "live" && source.relayUrl && identity?.binding ? (
+        <Panel title="Notifications">
+          <p className="small muted">
+            With the console open, approval requests arrive instantly over the relay's event stream and raise a browser notification.
+          </p>
+          <div className="form-actions">
+            {notif === "unsupported" ? <span className="muted">Not supported in this browser.</span> : notif === "granted" ? <Badge tone="active">Enabled</Badge> : (
+              <button className="btn btn-secondary" onClick={async () => setNotif(await Notification.requestPermission())}><Icon name="bell" size={14} /> Enable browser notifications</button>
+            )}
+          </div>
+        </Panel>
+      ) : null}
 
       <Panel title="Environments & certificate authorities">
         <p className="small muted">Each environment's CA is an Ed25519 key the NEAR MPC network derives for this contract at <span className="mono">sbc/ssh-user-ca/v{ov.data?.config.ca_version ?? 1}/&lt;env&gt;</span>. Paste the line into a host's <span className="mono">TrustedUserCAKeys</span> (the gate's enroll command does this for you).</p>
@@ -165,7 +168,7 @@ export function Settings() {
           </form>
         ) : inviteToken ? (
           <div className="enroll">
-            <p>Send this one-time link to <strong>{invite?.label}</strong> over a channel you trust. Opening it creates a non-extractable device key in their browser and binds it. It expires {new Date(inviteToken.expiresAtMs).toLocaleString()}.</p>
+            <p>Send this one-time link to <strong>{invite?.label}</strong> over a channel you trust. Opening it creates a non-extractable device key in their browser and binds it. It expires {dateTime(inviteToken.expiresAtMs)}.</p>
             <div className="cmd"><pre className="wrap">{joinLink}</pre><CopyButton text={joinLink} compact /></div>
           </div>
         ) : null}

@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { actionCommand, actionTitle, formatCountdown, formatDuration, type AccessRequest, type Check, type RequestEvent } from "@sbc/client";
 import { Icon } from "./Icon.tsx";
-import { cx, StateBadge, Badge } from "./ui.tsx";
+import { cx, StateBadge, Badge, FixtureTag } from "./ui.tsx";
 import { useNow } from "../lib/data/context.tsx";
 import { CODE_WHY, clock, eventTitle, timeAgo, type Denial } from "../lib/events.ts";
 
@@ -188,7 +188,7 @@ export function RequestLine({ r, label, right }: { r: AccessRequest; label: (id:
       <span className="req-id mono">#{r.id}</span>
       <span className="req-main">
         <span className="req-title">
-          <strong>{label(r.agent_id)}</strong> <span className="muted">·</span> {actionTitle(r.action)} <span className="muted">on</span> <span className="mono">{r.resource_id}</span>
+          <strong>{label(r.agent_id)}</strong> <span className="muted">·</span> {actionTitle(r.action)} <span className="muted">on</span> <span className="mono">{r.resource_id}</span> <FixtureTag id={r.resource_id} />
         </span>
         <span className="req-sub">{r.reason}</span>
       </span>
@@ -203,7 +203,7 @@ export function DenialRow({ d, label }: { d: Denial; label: (id: string) => stri
       <span className="denial-icon"><Icon name="x" size={14} /></span>
       <span className="denial-main">
         <span>
-          <strong>{label(d.request.agent_id)}</strong> attempted <code className="mono inline-cmd">{d.attempted}</code> on <span className="mono">{d.request.resource_id}</span>
+          <strong>{label(d.request.agent_id)}</strong> attempted <code className="mono inline-cmd">{d.attempted}</code> on <span className="mono">{d.request.resource_id}</span> <FixtureTag id={d.request.resource_id} />
         </span>
         <span className="denial-why">
           <Badge tone="danger" dot={false}>Denied</Badge> {d.why}

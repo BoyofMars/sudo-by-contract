@@ -5,7 +5,7 @@ import { Badge, Command, Dialog, Empty, ErrorNote, Field, KV, PageHeader, Panel,
 import { RequestLine } from "../../components/domain.tsx";
 import { useData, useQuery } from "../../lib/data/context.tsx";
 import { useAction, useIsAdmin, useLabels } from "../../lib/hooks.ts";
-import { dateTime } from "../../lib/events.ts";
+import { clock, dateTime } from "../../lib/events.ts";
 import type { EnrollmentToken } from "../../lib/data/source.ts";
 
 export function Agents() {
@@ -118,7 +118,7 @@ export function EnrollInstructions({ kind, token, contractId, principal }: { kin
     <div className="enroll">
       <p>
         Run this {kind === "agent" ? "where the agent runs" : "on the host, as root"}. It generates a key locally, binds it to <span className="mono">{principal}</span>, and burns this one-time token.
-        The token expires at {new Date(token.expiresAtMs).toLocaleTimeString()} and can only call <span className="mono">complete_enrollment</span>.
+        The token expires at {clock(token.expiresAtMs)} and can only call <span className="mono">complete_enrollment</span>.
       </p>
       <Command>{cmd}</Command>
       <p className="small muted">
@@ -185,7 +185,7 @@ export function AgentDetail({ id }: { id: string }) {
       </div>
       {token ? <Panel title="Enrollment token"><EnrollInstructions kind="agent" token={token} contractId={source.contractId} principal={a.id} /></Panel> : null}
       <Panel title="Recent requests" flush>
-        {reqs.data?.length ? <div className="list">{reqs.data.map((r) => <RequestLine key={r.id} r={r} label={label} />)}</div> : <Empty title="No requests yet" />}
+        {reqs.loading ? <Skeleton lines={3} /> : reqs.data?.length ? <div className="list">{reqs.data.map((r) => <RequestLine key={r.id} r={r} label={label} />)}</div> : <Empty title="No requests yet" />}
       </Panel>
     </div>
   );

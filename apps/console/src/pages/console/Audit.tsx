@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
 import { actionTitle } from "@sbc/client";
-import { Badge, Chips, Empty, PageHeader, Panel, Skeleton, Truncate, cx } from "../../components/ui.tsx";
-import { useQuery } from "../../lib/data/context.tsx";
+import { Badge, Chips, Empty, FixtureTag, PageHeader, Panel, Skeleton, Truncate, cx } from "../../components/ui.tsx";
+import { Icon } from "../../components/Icon.tsx";
+import { useData, useQuery } from "../../lib/data/context.tsx";
 import { useLabels } from "../../lib/hooks.ts";
-import { EVENT_KINDS, dateTime, eventTitle, parseDenial } from "../../lib/events.ts";
+import { explorerBase } from "../../lib/config.ts";
+import { EVENT_GROUPS, dateTime, eventTitle, groupOf, parseDenial } from "../../lib/events.ts";
+
+const SHOWN = 300;
 
 export function Audit() {
+  const { source } = useData();
   const label = useLabels();
   const reqs = useQuery((s) => s.requests({ limit: 100 }), [], { interval: 10_000 });
   const ov = useQuery((s) => s.overview(), [], { interval: 15_000 });
@@ -14,12 +19,14 @@ export function Audit() {
   const [text, setText] = useState("");
   const [open, setOpen] = useState<number | null>(null);
 
+  const all = useMemo(() => (reqs.data ?? []).flatMap((r) => r.events.map((e) => ({ r, e }))).sort((a, b) => b.e.seq - a.e.seq), [reqs.data]);
   const rows = useMemo(() => {
-    const out = (reqs.data ?? []).flatMap((r) => r.events.map((e) => ({ r, e })));
-    out.sort((a, b) => b.e.seq - a.e.seq);
+    const allowed = new Set(EVENT_GROUPS.filter((g) => kinds.includes(g.value)).flatMap((g) => g.kinds));
     const t = text.trim().toLowerCase();
-    return out.filter(({ r, e }) => (!kinds.length || kinds.includes(e.kind)) && (!t || `${r.id} ${r.agent_id} ${r.resource_id} ${r.action} ${e.actor} ${e.detail} ${e.kind}`.toLowerCase().includes(t)));
-  }, [reqs.data, kinds, text]);
+    return all.filter(({ r, e }) => (!kinds.length || allowed.has(e.kind)) && (!t || `${r.id} ${r.agent_id} ${r.resource_id} ${r.action} ${e.actor} ${e.detail} ${e.kind}`.toLowerCase().includes(t)));
+  }, [all, kinds, text]);
+  const head = ov.data?.audit_seq ?? 0;
+  const newestShown = all[0]?.e.seq ?? 0;
 
   return (
     <div className="page">
@@ -40,8 +47,20 @@ export function Audit() {
 
       <div className="filters filters-wrap">
         <input className="input" placeholder="Filter by agent, resource, action, detail…" value={text} onChange={(e) => setText(e.target.value)} />
-        <Chips mono options={EVENT_KINDS.map((k) => ({ value: k, label: k.toUpperCase() }))} value={kinds} onChange={setKinds} />
+        <Chips options={EVENT_GROUPS.map((g) => ({ value: g.value, label: g.label }))} value={kinds} onChange={setKinds} />
       </div>
+
+      {!reqs.loading && all.length ? (
+        <p className="small muted audit-scope">
+          Showing {Math.min(rows.length, SHOWN)} of {all.length} events attached to capability requests.
+          {source.mode === "live" && head > newestShown ? (
+            <>
+              {" "}Events not tied to a request (identity, key and policy changes; up to #{head}) are in the contract's transaction logs:{" "}
+              <a href={`${explorerBase(source.network)}/address/${source.contractId}`} target="_blank" rel="noreferrer">open on the explorer <Icon name="external" size={11} /></a>.
+            </>
+          ) : null}
+        </p>
+      ) : null}
 
       {reqs.loading ? (
         <Skeleton lines={8} />
@@ -49,7 +68,7 @@ export function Audit() {
         <Empty title="No events match" />
       ) : (
         <div className="audit-table">
-          {rows.slice(0, 300).map(({ r, e }) => {
+          {rows.slice(0, SHOWN).map(({ r, e }) => {
             const t = eventTitle(e, label);
             const denial = e.kind === "command_denied" ? parseDenial(r, e, reports.data ?? []) : null;
             const expanded = open === e.seq;
@@ -57,7 +76,7 @@ export function Audit() {
               <div key={e.seq} className={cx("audit-row", `tone-${t.tone}`, expanded && "open")}>
                 <button className="audit-main" onClick={() => setOpen(expanded ? null : e.seq)} aria-expanded={expanded}>
                   <span className="mono muted audit-seq">#{e.seq}</span>
-                  <span className="audit-kind mono">{e.kind.toUpperCase()}</span>
+                  <span className="audit-kind mono">{groupOf(e.kind)}</span>
                   <span className="audit-text">
                     {denial ? (
                       <>
@@ -65,15 +84,21 @@ export function Audit() {
                       </>
                     ) : (
                       <>
-                        {t.title} <span className="muted">· {label(r.agent_id)} · {actionTitle(r.action)} on <span className="mono">{r.resource_id}</span></span>
+                        {t.title}{" "}
+                        <span className="muted">
+                          · {t.title.includes(label(r.agent_id)) ? "" : `${label(r.agent_id)} · `}
+                          {actionTitle(r.action)} on <span className="mono">{r.resource_id}</span>
+                        </span>
                       </>
-                    )}
+                    )}{" "}
+                    <FixtureTag id={r.resource_id} />
                   </span>
                   <span className="audit-time muted">{dateTime(e.at_ms)}</span>
                 </button>
                 {expanded ? (
                   <dl className="tl-tech">
                     <div><dt>request</dt><dd><a className="mono" href={`#/console/requests/${r.id}`}>#{r.id}</a></dd></div>
+                    <div><dt>event</dt><dd className="mono">{e.kind} · seq {e.seq}</dd></div>
                     <div><dt>actor</dt><dd className="mono">{e.actor}</dd></div>
                     <div><dt>detail</dt><dd className="mono wrap">{e.detail}</dd></div>
                     <div><dt>time</dt><dd className="mono">{new Date(e.at_ms).toISOString()}</dd></div>

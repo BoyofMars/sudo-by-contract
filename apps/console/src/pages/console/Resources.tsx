@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Resource } from "@sbc/client";
 import { Icon } from "../../components/Icon.tsx";
-import { Badge, CopyButton, Empty, ErrorNote, Field, KV, PageHeader, Panel, Skeleton, Truncate, cx } from "../../components/ui.tsx";
+import { Badge, CopyButton, Empty, ErrorNote, Field, FixtureTag, KV, PageHeader, Panel, Skeleton, Truncate, cx } from "../../components/ui.tsx";
 import { RequestLine } from "../../components/domain.tsx";
 import { useData, useNow, useQuery } from "../../lib/data/context.tsx";
 import { useAction, useIsAdmin, useLabels } from "../../lib/hooks.ts";
@@ -48,8 +48,8 @@ export function Resources() {
                 const h = health(r, now);
                 return (
                   <tr key={r.id} className="clickable" onClick={() => (window.location.hash = `#/console/resources/${r.id}`)}>
-                    <td>
-                      <a className="mono strong-link" href={`#/console/resources/${r.id}`}>{r.id}</a>
+                    <td className="nowrap">
+                      <a className="mono strong-link" href={`#/console/resources/${r.id}`}>{r.id}</a> <FixtureTag id={r.id} />
                       {r.label !== r.id ? <div className="cell-sub">{r.label}</div> : null}
                     </td>
                     <td><Badge tone="muted" dot={false}>{r.environment}</Badge></td>
@@ -86,7 +86,7 @@ export function ResourceDetail({ id }: { id: string }) {
     <div className="page">
       <PageHeader
         back={{ to: "/console/resources", label: "Resources" }}
-        title={<span className="title-with-badge"><span className="mono">{r.id}</span> <Badge tone={h.tone}>{h.text}</Badge></span>}
+        title={<span className="title-with-badge"><span className="mono">{r.id}</span> <Badge tone={h.tone}>{h.text}</Badge> <FixtureTag id={r.id} /></span>}
         subtitle={r.label !== r.id ? r.label : `${r.environment} · ${r.services.length} services`}
         actions={
           isAdmin ? (
@@ -128,7 +128,7 @@ export function ResourceDetail({ id }: { id: string }) {
         </Panel>
       </div>
       <Panel title="Recent requests on this resource" flush>
-        {reqs.data?.length ? <div className="list">{reqs.data.map((x) => <RequestLine key={x.id} r={x} label={label} />)}</div> : <Empty title="No requests yet" />}
+        {reqs.loading ? <Skeleton lines={3} /> : reqs.data?.length ? <div className="list">{reqs.data.map((x) => <RequestLine key={x.id} r={x} label={label} />)}</div> : <Empty title="No requests yet" />}
       </Panel>
     </div>
   );

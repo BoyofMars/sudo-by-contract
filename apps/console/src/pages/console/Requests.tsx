@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { actionTitle, formatDuration, LIVE_STATES, type RequestState } from "@sbc/client";
-import { Empty, PageHeader, Segmented, Skeleton, StateBadge } from "../../components/ui.tsx";
-import { useQuery } from "../../lib/data/context.tsx";
+import { Empty, FixtureTag, PageHeader, Segmented, Skeleton, StateBadge } from "../../components/ui.tsx";
+import { useData, useQuery } from "../../lib/data/context.tsx";
 import { useLabels } from "../../lib/hooks.ts";
 import { dateTime } from "../../lib/events.ts";
 
@@ -10,6 +10,9 @@ const CLOSED: RequestState[] = ["Exhausted", "Expired", "Revoked", "Denied", "Re
 
 export function Requests({ query }: { query: URLSearchParams }) {
   const label = useLabels();
+  const { source, bump } = useData();
+  const [showFixtures, setShowFixtures] = useState(source.showFixtures !== false);
+  const fixtures = useQuery((s) => (s.fixtureSummary ? s.fixtureSummary() : Promise.resolve(null)), [], { interval: 60_000 });
   const [filter, setFilter] = useState<Filter>((query.get("filter") as Filter) || "all");
   const [agent, setAgent] = useState(query.get("agent") ?? "");
   const [resource, setResource] = useState(query.get("resource") ?? "");
@@ -35,7 +38,7 @@ export function Requests({ query }: { query: URLSearchParams }) {
           options={[
             { value: "all", label: "All" },
             { value: "pending", label: "Pending" },
-            { value: "live", label: "Live" },
+            { value: "live", label: "Active" },
             { value: "closed", label: "Closed" },
           ]}
         />
@@ -47,6 +50,20 @@ export function Requests({ query }: { query: URLSearchParams }) {
           <option value="">All resources</option>
           {(resources.data ?? []).map((r) => <option key={r.id} value={r.id}>{r.id}</option>)}
         </select>
+        {source.setShowFixtures && fixtures.data?.requests ? (
+          <label className="check-inline small">
+            <input
+              type="checkbox"
+              checked={showFixtures}
+              onChange={(e) => {
+                source.setShowFixtures?.(e.target.checked);
+                setShowFixtures(e.target.checked);
+                bump();
+              }}
+            />
+            Include e2e test runs
+          </label>
+        ) : null}
       </div>
 
       {reqs.loading ? (
@@ -73,12 +90,12 @@ export function Requests({ query }: { query: URLSearchParams }) {
                   <td className="mono muted">
                     <a href={`#/console/requests/${r.id}`}>#{r.id}</a>
                   </td>
-                  <td>{label(r.agent_id)}</td>
+                  <td className="nowrap">{label(r.agent_id)}</td>
                   <td>
                     {actionTitle(r.action)}
                     <div className="cell-sub">{r.reason}</div>
                   </td>
-                  <td className="mono">{r.resource_id}</td>
+                  <td className="mono nowrap">{r.resource_id} <FixtureTag id={r.resource_id} /></td>
                   <td className="hide-md mono">
                     {formatDuration(r.granted_duration_secs || r.requested_duration_secs)} · {r.uses}/{r.max_uses}
                   </td>

@@ -23,12 +23,14 @@ import { RelayClient, type ContextRecord, type GateReport } from "../relay.ts";
 import { networkOf } from "../config.ts";
 import { isFixtureId, type DataSource, type EnrollmentToken, type FixtureSummary, type Identity, type RelayState, type RequestQuery } from "./source.ts";
 
-const FIXTURES_KEY = "sbc.showFixtures";
+// Shown by default and tagged "e2e" where they appear: hiding them made
+// on-chain totals (agent stats, audit seq) disagree with the lists.
+const FIXTURES_KEY = "sbc.fixtures";
 function readShowFixtures(): boolean {
   try {
-    return localStorage.getItem(FIXTURES_KEY) === "1";
+    return localStorage.getItem(FIXTURES_KEY) !== "hide";
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -74,7 +76,8 @@ export class LiveSource implements DataSource {
   setShowFixtures(show: boolean) {
     this.showFixtures = show;
     try {
-      localStorage.setItem(FIXTURES_KEY, show ? "1" : "0");
+      if (show) localStorage.removeItem(FIXTURES_KEY);
+      else localStorage.setItem(FIXTURES_KEY, "hide");
     } catch {
       /* per-browser convenience only */
     }

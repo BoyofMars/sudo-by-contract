@@ -30,20 +30,10 @@ const NAV = [
 const MOBILE = ["/console", "/console/requests", "/console/active", "/console/audit"];
 
 export function Shell({ path, query }: { path: string; query: URLSearchParams }) {
-  const { source, setClockOffset, identity, bump } = useData();
-  const [theme, setTheme] = useTheme();
+  const { source, setClockOffset, identity } = useData();
+  const [, setTheme, theme] = useTheme();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [showFixtures, setShowFixtures] = useState(!!source.showFixtures);
   const ov = useQuery((s) => s.overview(), [], { interval: 15_000 });
-  const fixtures = useQuery((s) => (s.fixtureSummary ? s.fixtureSummary() : Promise.resolve(null)), [], { interval: 60_000 });
-  const fx = fixtures.data;
-  const fixtureTotal = fx ? fx.resources + fx.approvers + fx.agents + fx.requests : 0;
-  const toggleFixtures = () => {
-    const next = !showFixtures;
-    source.setShowFixtures?.(next);
-    setShowFixtures(next);
-    bump();
-  };
   const pending = useQuery((s) => s.requests({ states: ["PendingApproval"], limit: 20 }), [], { interval: 10_000 });
   useEffect(() => {
     if (ov.data) setClockOffset(ov.data.now_ms - Date.now());
@@ -101,8 +91,8 @@ export function Shell({ path, query }: { path: string; query: URLSearchParams })
               <div className="muted conn-net">{source.mode === "preview" ? "no network" : `NEAR ${source.network}`}</div>
             </div>
           </div>
-          <button className="btn btn-ghost btn-xs" onClick={() => setTheme(theme === "dark" ? "light" : theme === "light" ? "system" : "dark")} title={`Theme: ${theme}`}>
-            <Icon name={theme === "dark" ? "moon" : "sun"} size={14} /> <span>{theme}</span>
+          <button className="btn btn-ghost btn-xs" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={14} /> <span>{theme === "dark" ? "Light" : "Dark"}</span>
           </button>
         </div>
       </aside>
@@ -117,28 +107,12 @@ export function Shell({ path, query }: { path: string; query: URLSearchParams })
           <div className="live-banner" role="note">
             <span className="live-chip"><span className="live-dot" aria-hidden /> Live</span>
             <span className="lb-text">
-              <span className="fx-long">{readOnly ? `Read-only view of ${source.contractId} on NEAR ${source.network}. Every row is read from the chain.` : `Every row is read from ${source.contractId} on NEAR ${source.network}.`}</span>
-              <span className="fx-short">NEAR {source.network}{readOnly ? " · read-only" : ""}</span>
+              <span className="fx-long">{readOnly ? "Read-only · every row is read from NEAR " : "Every row is read from NEAR "}{source.network}</span>
+              <span className="fx-short">{readOnly ? "read-only" : `NEAR ${source.network}`}</span>
             </span>
-            {fx && fixtureTotal > 0 ? (
-              <span
-                className="lb-fx"
-                title={`Test fixtures from the live end-to-end run (named e2e-…): ${[
-                  fx.resources ? `${fx.resources} host${fx.resources > 1 ? "s" : ""}` : "",
-                  fx.approvers ? `${fx.approvers} approver${fx.approvers > 1 ? "s" : ""}` : "",
-                  fx.agents ? `${fx.agents} agent${fx.agents > 1 ? "s" : ""}` : "",
-                  fx.requests ? `${fx.requests} request${fx.requests > 1 ? "s" : ""}` : "",
-                ].filter(Boolean).join(", ")}`}
-              >
-                <span className="fixture-tag mono">e2e</span>
-                <span>{showFixtures ? "shown" : `${fixtureTotal} hidden`}</span>
-                <button type="button" className="btn btn-ghost btn-xs" onClick={toggleFixtures}>{showFixtures ? "Hide" : "Show"}</button>
-              </span>
-            ) : null}
             {readOnly ? (
-              <a className="btn btn-secondary btn-xs lb-sim" href="#/console?preview=1">
-                <span className="fx-long">Try the simulation</span>
-                <span className="fx-short">Simulation</span>
+              <a className="btn btn-secondary btn-xs lb-sim" href="#/console?preview=1" title="An interactive sandbox with simulated data where you can approve, deny and revoke">
+                Try simulation
               </a>
             ) : null}
           </div>

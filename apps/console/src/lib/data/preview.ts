@@ -101,7 +101,6 @@ const HERO_CONTEXT: ContextDocument = {
     { label: "Health check", value: "GET /health timed out after 5s (3 of 3 probes)" },
     { label: "Process", value: "checkout-api running, event loop blocked; no OOM, disk 41%" },
   ],
-  links: [{ label: "Checkout latency dashboard", url: "https://grafana.example.com/d/checkout" }],
 };
 
 function emptyStats(): AgentStats {
@@ -318,7 +317,7 @@ export class PreviewSource implements DataSource {
       else if (e.outcome.kind === "approval") { r.state = "PendingApproval"; r.required_approvals = e.outcome.required; }
       else { r.state = "Signing"; r.granted_duration_secs = secs; }
     }
-    const detail = r.state === "Rejected" ? r.state_reason ?? "" : r.state === "PendingApproval" ? `policy ${r.policy_id} requires ${r.required_approvals} approval(s)` : `auto-approved by policy ${r.policy_id}`;
+    const detail = r.state === "Rejected" ? r.state_reason ?? "" : r.state === "PendingApproval" ? `policy ${r.policy_id} requires ${r.required_approvals} approval${r.required_approvals === 1 ? "" : "s"}` : `auto-approved by policy ${r.policy_id}`;
     this.ev(r, "policy_evaluated", "policy", detail, at + 5);
     this.reqs.push(r);
     if (r.state === "Signing") {

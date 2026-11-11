@@ -11,7 +11,7 @@ import {
   type AccessRequest,
 } from "@sbc/client";
 import { Icon } from "../../components/Icon.tsx";
-import { Badge, Command, CopyButton, Countdown, Dialog, Empty, ErrorNote, Field, KV, PageHeader, Panel, Skeleton, StateBadge, Truncate, cx } from "../../components/ui.tsx";
+import { Badge, Command, CopyButton, Countdown, Dialog, Empty, ErrorNote, Field, FixtureTag, KV, PageHeader, Panel, Skeleton, StateBadge, Truncate, cx } from "../../components/ui.tsx";
 import { PolicyChecks, Timeline, WindowBar } from "../../components/domain.tsx";
 import { useData, useNow, useQuery } from "../../lib/data/context.tsx";
 import { useAction, useCanApprove, useLabels } from "../../lib/hooks.ts";
@@ -45,7 +45,19 @@ export function RequestDetail({ id }: { id: number }) {
   }, [r, stage]);
 
   if (q.loading) return <div className="page"><Skeleton lines={8} /></div>;
-  if (!r) return <div className="page"><Empty title={`Request #${id} not found`}>It may belong to a different contract.</Empty></div>;
+  if (!r)
+    return (
+      <div className="page">
+        <PageHeader back={{ to: "/console/requests", label: "Requests" }} title={`Request #${id}`} subtitle={source.mode === "live" ? `Not on ${source.contractId}.` : "Not in this simulation."} />
+        <Empty title={`Request #${id} not found`}>
+          {source.mode === "live" ? (
+            <>It may be from the simulation or another contract. <a href={`#/console/requests/${id}?preview=1`}>Open it in the simulation</a>.</>
+          ) : (
+            <>The simulation starts fresh in each tab. <a href="#/console?preview=0">Back to the live contract</a>.</>
+          )}
+        </Empty>
+      </div>
+    );
 
   const pending = r.state === "PendingApproval";
   const live = r.state === "Active" || r.state === "Signing";
@@ -75,7 +87,7 @@ export function RequestDetail({ id }: { id: number }) {
         }
         subtitle={
           <>
-            <span className="mono">#{r.id}</span> · {label(r.agent_id)} · <span className="mono">{r.resource_id}</span> · {dateTime(r.created_at_ms)}
+            <span className="mono">#{r.id}</span> · {label(r.agent_id)} · <span className="mono">{r.resource_id}</span> <FixtureTag id={r.resource_id} /> · {dateTime(r.created_at_ms)}
           </>
         }
         actions={
@@ -161,7 +173,7 @@ export function RequestDetail({ id }: { id: number }) {
 
           <HostActivity r={r} reports={reports.data ?? []} />
 
-          <Panel title="Timeline" actions={<span className="muted small">tap an event for technical detail</span>}>
+          <Panel title="Timeline" actions={<span className="muted small">select an event for technical detail</span>}>
             <Timeline events={[...r.events].reverse()} label={label} />
           </Panel>
         </div>
@@ -177,6 +189,12 @@ export function RequestDetail({ id }: { id: number }) {
                 </div>
               ) : null}
               {pending ? <ApprovalDeadline r={r} /> : null}
+              {pending && canApprove && !mine && eligible ? (
+                <div className="status-actions hide-sm">
+                  <button className="btn btn-secondary" onClick={() => setDialog("deny")} disabled={action.busy}>Deny</button>
+                  <button className="btn btn-approve" onClick={() => setDialog("approve")} disabled={action.busy}>Approve {formatDuration(r.requested_duration_secs)}</button>
+                </div>
+              ) : null}
             </div>
             <KV
               cols={1}
@@ -434,6 +452,7 @@ function Certificate({ line }: { line: string }) {
 function ApproveDialog({ open, r, label, onClose, onConfirm }: { open: boolean; r: AccessRequest; label: (id: string) => string; onClose: () => void; onConfirm: (maxDur?: number) => void }) {
   const options = [60, 120, 300, 600, 900, 1800, 3600].filter((s) => s < r.requested_duration_secs);
   const [dur, setDur] = useState(r.requested_duration_secs);
+  const simulated = useData().source.mode === "preview";
   return (
     <Dialog
       open={open}
@@ -462,9 +481,15 @@ function ApproveDialog({ open, r, label, onClose, onConfirm }: { open: boolean; 
           ))}
         </select>
       </Field>
-      <p className="small muted">
-        Your approval is signed by this device's key and recorded on NEAR. If it completes the policy, the contract immediately asks the MPC network to sign a certificate valid only for <span className="mono">sbc-{r.resource_id}</span>, forced through the host gate.
-      </p>
+      {simulated ? (
+        <p className="small muted">
+          Simulation: nothing is sent anywhere. On a live contract your approval is signed by this device's key and recorded on NEAR, and if it completes the policy the MPC network signs a certificate valid only for <span className="mono">sbc-{r.resource_id}</span>.
+        </p>
+      ) : (
+        <p className="small muted">
+          Your approval is signed by this device's key and recorded on NEAR. If it completes the policy, the contract immediately asks the MPC network to sign a certificate valid only for <span className="mono">sbc-{r.resource_id}</span>, forced through the host gate.
+        </p>
+      )}
     </Dialog>
   );
 }

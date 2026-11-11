@@ -16,6 +16,16 @@ export function Badge({ tone = "neutral", children, dot = true }: { tone?: strin
   );
 }
 
+/** Marks hosts, identities and requests created by the live end-to-end test run. */
+export function FixtureTag({ id }: { id: string | null | undefined }) {
+  if (!id || !id.startsWith("e2e-")) return null;
+  return (
+    <span className="fixture-tag mono" title="Created by the live end-to-end test run (scripts/e2e-testnet.ts)">
+      e2e test
+    </span>
+  );
+}
+
 export function StateBadge({ state }: { state: RequestState }) {
   return <Badge tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Badge>;
 }

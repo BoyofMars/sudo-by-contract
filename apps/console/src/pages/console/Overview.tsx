@@ -22,12 +22,17 @@ export function Overview() {
   const live = all.filter((r) => r.state === "Active" || r.state === "Signing");
   const denials = denialsOf(all, reports.data ?? []).slice(0, 5);
   const done = all.filter((r) => ["Exhausted", "Expired", "Revoked", "Cancelled", "Denied", "Rejected"].includes(r.state)).slice(0, 6);
-  const online = (resources.data ?? []).filter((r) => r.status === "Active" && r.last_seen_ms && now - r.last_seen_ms < 10 * 60_000).length;
-  const enrolled = (resources.data ?? []).filter((r) => r.status !== "Pending").length;
+  // disabled hosts are not expected to report in
+  const activeHosts = (resources.data ?? []).filter((r) => r.status === "Active");
+  const online = activeHosts.filter((r) => r.last_seen_ms && now - r.last_seen_ms < 10 * 60_000).length;
+  const lastHeartbeat = Math.max(0, ...activeHosts.map((r) => r.last_seen_ms ?? 0));
 
   return (
     <div className="page">
-      <PageHeader title="Overview" subtitle={pending.length ? `${pending.length} request${pending.length > 1 ? "s" : ""} need${pending.length > 1 ? "" : "s"} a human decision.` : "Nothing is waiting on you."} />
+      <PageHeader
+        title="Overview"
+        subtitle={reqs.loading ? "Reading the contract…" : pending.length ? `${pending.length} request${pending.length > 1 ? "s" : ""} need${pending.length > 1 ? "" : "s"} a human decision.` : "Nothing is waiting on you."}
+      />
 
       <div className="overview-grid">
         <div className="overview-main">
@@ -47,7 +52,7 @@ export function Overview() {
 
           <section>
             <h2 className="section-title">
-              <span>Active privileges</span>
+              <span>Active access</span>
               {live.length ? <span className="count tone-active">{live.length}</span> : null}
             </h2>
             {reqs.loading ? (
@@ -80,7 +85,9 @@ export function Overview() {
               <span>Recent denials</span>
               <span className="section-hint">Blocked escalation attempts are the product working.</span>
             </h2>
-            {denials.length === 0 ? (
+            {reqs.loading ? (
+              <Skeleton lines={2} />
+            ) : denials.length === 0 ? (
               <Empty title="No denied commands" icon="shield" />
             ) : (
               <div className="list">{denials.map((d) => <DenialRow key={`${d.request.id}-${d.event.seq}`} d={d} label={label} />)}</div>
@@ -92,11 +99,17 @@ export function Overview() {
               <span>Recently closed</span>
               <a className="section-link" href="#/console/requests">All requests <Icon name="arrow" size={12} /></a>
             </h2>
-            <div className="list">
-              {done.map((r) => (
-                <RequestLine key={r.id} r={r} label={label} right={<span className="closed-meta"><StateBadge state={r.state} /><span className="muted">{timeAgo(lastAt(r), now)}</span></span>} />
-              ))}
-            </div>
+            {reqs.loading ? (
+              <Skeleton lines={3} />
+            ) : done.length === 0 ? (
+              <Empty title="Nothing closed yet" icon="check" />
+            ) : (
+              <div className="list">
+                {done.map((r) => (
+                  <RequestLine key={r.id} r={r} label={label} right={<span className="closed-meta"><StateBadge state={r.state} /><span className="muted">{timeAgo(lastAt(r), now)}</span></span>} />
+                ))}
+              </div>
+            )}
           </section>
         </div>
 
@@ -104,9 +117,19 @@ export function Overview() {
           <Panel title="System">
             <ul className="health">
               <li>
-                <span className={cx("hdot", online === enrolled && enrolled > 0 ? "ok" : enrolled ? "warn" : "idle")} />
-                <span>Hosts online</span>
-                <span className="mono">{resources.data ? `${online}/${enrolled}` : "—"}</span>
+                <span className={cx("hdot", activeHosts.length && online === activeHosts.length ? "ok" : "idle")} />
+                <span>Hosts</span>
+                <span className="muted">
+                  {!resources.data
+                    ? "—"
+                    : !activeHosts.length
+                      ? "none active"
+                      : online === activeHosts.length
+                        ? `${online}/${activeHosts.length} online`
+                        : lastHeartbeat
+                          ? `last heartbeat ${timeAgo(lastHeartbeat, now)}`
+                          : `${online}/${activeHosts.length} online`}
+                </span>
               </li>
               {(ov.data?.environments ?? []).map((e) => (
                 <li key={e.name}>
@@ -120,11 +143,13 @@ export function Overview() {
                 <span>Threshold signer</span>
                 <span className="mono small">{ov.data?.config.mpc_contract ?? "—"}</span>
               </li>
-              <li>
-                <span className={cx("hdot", relay.data === "ok" ? "ok" : relay.data === "unconfigured" ? "idle" : "warn")} />
-                <span>Private relay</span>
-                <span className="muted">{relay.data === "ok" ? "connected" : relay.data === "unconfigured" ? "not configured" : "unreachable"}</span>
-              </li>
+              {relay.data && relay.data !== "unconfigured" ? (
+                <li>
+                  <span className={cx("hdot", relay.data === "ok" ? "ok" : "warn")} />
+                  <span>Private relay</span>
+                  <span className="muted">{relay.data === "ok" ? "connected" : "unreachable"}</span>
+                </li>
+              ) : null}
               <li>
                 <span className="hdot ok" />
                 <span>Policy engine</span>
