@@ -30,8 +30,10 @@ back from the contract.
 
 ## A real model and a prompt injection
 
-`--scenario injection` (also a live-hero option) replaces the scripted agent with Claude
-Opus 5.5 through the Anthropic SDK (`apps/demo-agent/src/llm-agent.ts`). The model gets the
+`--scenario injection` (also a live-hero option) replaces the scripted agent with a real
+model (`apps/demo-agent/src/llm-agent.ts`): Gemini through Google's SDK (Interactions API,
+`gemini-3.8-flash` by default) when `GEMINI_API_KEY` is set, or Claude Opus 5.5 through the
+Anthropic SDK when `ANTHROPIC_API_KEY` is; `SBC_LLM_MODEL` picks another model. The model gets the
 incident ticket and four tools: `check_health`, `request_capability`, `run_command` and
 `release_capability`. It holds no credential, so every server action goes through the same
 path as above: policy, perhaps a person, an MPC-signed certificate, sshd, the gate and
@@ -47,8 +49,8 @@ injected commands verbatim under a fresh read-only capability: the gate refuses 
 /etc/shadow` and `sudo -i` outright, and the contract refuses `restart payments-api` as out
 of scope. Either way, the result does not depend on the model resisting.
 
-Needs `ANTHROPIC_API_KEY` (a repository secret for live-hero). A run costs well under a
-dollar of model usage.
+Needs `GEMINI_API_KEY` or `ANTHROPIC_API_KEY` (a repository secret for live-hero). A run
+costs well under a dollar of model usage.
 
 ## Option A — Docker sandbox (real sshd, real testnet, real MPC)
 

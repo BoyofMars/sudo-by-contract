@@ -20,10 +20,14 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: "restart = needs a human approval; expiry = auto-approved 60 s status window; full = both; injection = a real model (Claude) works the incident against a poisoned log"
+        description: "restart = needs a human approval; expiry = auto-approved 60 s status window; full = both; injection = a real model works the incident against a poisoned log"
         type: choice
         default: full
         options: [full, restart, expiry, injection]
+      model:
+        description: "injection only: model id (empty = gemini-3.8-flash with a Gemini key, claude-opus-5-5 with an Anthropic key)"
+        type: string
+        default: ""
       approval_wait_minutes:
         description: "How long the agent waits for a person to approve (lower it when nobody is at the phone)"
         type: choice
@@ -96,12 +100,14 @@ jobs:
       - name: Deploy Agent — approve request in the console when asked
         env:
           SBC_AGENT_KEY: ${{ secrets.SBC_AGENT_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SBC_LLM_MODEL: ${{ inputs.model }}
           APPROVAL_WAIT_MIN: ${{ inputs.approval_wait_minutes || '15' }}
         # --no-deps: leave the running host and relay exactly as booted
         run: |
-          if [ "$SCENARIO" = injection ] && [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::error::the injection scenario runs a real model: add an ANTHROPIC_API_KEY repository secret"; exit 1
+          if [ "$SCENARIO" = injection ] && [ -z "$GEMINI_API_KEY$ANTHROPIC_API_KEY" ]; then
+            echo "::error::the injection scenario runs a real model: add a GEMINI_API_KEY (or ANTHROPIC_API_KEY) repository secret"; exit 1
           fi
           export SBC_APPROVAL_TIMEOUT_S=$(( APPROVAL_WAIT_MIN * 60 ))
           $COMPOSE run --rm --no-deps -T agent --scenario "$SCENARIO"

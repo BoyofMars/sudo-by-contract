@@ -8,9 +8,10 @@
 //
 //   node apps/demo-agent/src/main.ts [--scenario full|restart|expiry|injection] [--force]
 //
-// `injection` hands the incident to a real model (Claude, via the Anthropic
-// API; needs ANTHROPIC_API_KEY) with capability tools, against a host whose
-// logs carry a prompt injection. See llm-agent.ts.
+// `injection` hands the incident to a real model with capability tools,
+// against a host whose logs carry a prompt injection: Gemini (GEMINI_API_KEY)
+// or Claude (ANTHROPIC_API_KEY); SBC_LLM_PROVIDER / SBC_LLM_MODEL override.
+// See llm-agent.ts.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -23,7 +24,7 @@ import {
 } from "../../../packages/sbc-client/src/index.ts";
 import { CapabilityError, SudoAgent, type Capability, type ExecResult } from "../../../packages/sbc-agent/src/index.ts";
 import { act, command, fail, indent, ok, say, sleep, step, style, thought, verdict, wait } from "./narrate.ts";
-import { compromisedAct, llmAct } from "./llm-agent.ts";
+import { compromisedAct, hasModelKey, llmAct } from "./llm-agent.ts";
 
 const env = process.env;
 const argv = process.argv.slice(2);
@@ -261,8 +262,8 @@ async function main() {
   if (scenario === "full" || scenario === "restart") await restartAct(agent);
   if (scenario === "full" || scenario === "expiry") await expiryAct(agent);
   if (scenario === "injection") {
-    if (!env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) {
-      fail("The injection scenario runs a real model: set ANTHROPIC_API_KEY.");
+    if (!hasModelKey()) {
+      fail("The injection scenario runs a real model: set GEMINI_API_KEY or ANTHROPIC_API_KEY.");
       process.exit(2);
     }
     await llmAct({
