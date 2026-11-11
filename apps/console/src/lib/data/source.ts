@@ -45,6 +45,16 @@ export interface EnrollmentToken {
 
 export type RelayState = "ok" | "unavailable" | "unconfigured";
 
+/** Identities and hosts created by `scripts/e2e-testnet.ts` are named `e2e-…`. */
+export const isFixtureId = (id: string | null | undefined) => !!id && id.startsWith("e2e-");
+
+export interface FixtureSummary {
+  resources: number;
+  approvers: number;
+  agents: number;
+  requests: number;
+}
+
 export interface DataSource {
   readonly mode: Mode;
   readonly contractId: string;
@@ -62,6 +72,11 @@ export interface DataSource {
   policy(id: string, version?: number): Promise<Policy | null>;
   simulate(a: { agent_id: string; resource_id: string; action: string; duration_secs: number; uses?: number; source_address?: string }): Promise<SimulateResult>;
   identity(): Promise<Identity>;
+
+  /** Test fixtures from the live end-to-end run: hidden from lists unless shown. */
+  readonly showFixtures?: boolean;
+  setShowFixtures?(show: boolean): void;
+  fixtureSummary?(): Promise<FixtureSummary>;
 
   relayState(): Promise<RelayState>;
   context(hash: string): Promise<ContextRecord | null>;

@@ -21,7 +21,16 @@ import {
 import { deleteDeviceKey, loadDeviceKey, saveDeviceKey } from "../devicekey.ts";
 import { RelayClient, type ContextRecord, type GateReport } from "../relay.ts";
 import { networkOf } from "../config.ts";
-import type { DataSource, EnrollmentToken, Identity, RelayState, RequestQuery } from "./source.ts";
+import { isFixtureId, type DataSource, type EnrollmentToken, type FixtureSummary, type Identity, type RelayState, type RequestQuery } from "./source.ts";
+
+const FIXTURES_KEY = "sbc.showFixtures";
+function readShowFixtures(): boolean {
+  try {
+    return localStorage.getItem(FIXTURES_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export class LiveSource implements DataSource {
   readonly mode = "live" as const;
@@ -59,12 +68,36 @@ export class LiveSource implements DataSource {
     return new RelayClient(this.relayUrl, await this.signer());
   }
 
+  // Fixtures stay on-chain and reachable by direct link (request ids, agent
+  // and resource pages); they are only left out of lists by default.
+  showFixtures = readShowFixtures();
+  setShowFixtures(show: boolean) {
+    this.showFixtures = show;
+    try {
+      localStorage.setItem(FIXTURES_KEY, show ? "1" : "0");
+    } catch {
+      /* per-browser convenience only */
+    }
+  }
+  async fixtureSummary(): Promise<FixtureSummary> {
+    const [res, appr, ag, reqs] = await Promise.all([this.c.resources(), this.c.approvers(), this.c.agents(), this.c.requests({ limit: 100 })]);
+    return {
+      resources: res.filter((r) => isFixtureId(r.id)).length,
+      approvers: appr.filter((a) => isFixtureId(a.id)).length,
+      agents: ag.filter((a) => isFixtureId(a.id)).length,
+      requests: reqs.filter((r) => isFixtureId(r.resource_id) || isFixtureId(r.agent_id)).length,
+    };
+  }
+  private keep<T>(items: T[], ...ids: ((t: T) => string)[]): T[] {
+    return this.showFixtures ? items : items.filter((t) => !ids.some((id) => isFixtureId(id(t))));
+  }
+
   overview() { return this.c.overview(); }
-  requests(q: RequestQuery = {}) { return this.c.requests(q); }
+  async requests(q: RequestQuery = {}) { return this.keep(await this.c.requests(q), (r) => r.resource_id, (r) => r.agent_id); }
   request(id: number) { return this.c.request(id); }
-  agents() { return this.c.agents(); }
-  approvers() { return this.c.approvers(); }
-  resources() { return this.c.resources(); }
+  async agents() { return this.keep(await this.c.agents(), (a) => a.id); }
+  async approvers() { return this.keep(await this.c.approvers(), (a) => a.id); }
+  async resources() { return this.keep(await this.c.resources(), (r) => r.id); }
   policies() { return this.c.policies(); }
   policy(id: string, version?: number) { return this.c.policy(id, version); }
   simulate(a: Parameters<SudoContract["simulate"]>[0]) { return this.c.simulate(a); }

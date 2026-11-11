@@ -29,10 +29,20 @@ const NAV = [
 const MOBILE = ["/console", "/console/requests", "/console/active", "/console/audit"];
 
 export function Shell({ path, query }: { path: string; query: URLSearchParams }) {
-  const { source, setClockOffset, identity } = useData();
+  const { source, setClockOffset, identity, bump } = useData();
   const [theme, setTheme] = useTheme();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [showFixtures, setShowFixtures] = useState(!!source.showFixtures);
   const ov = useQuery((s) => s.overview(), [], { interval: 15_000 });
+  const fixtures = useQuery((s) => (s.fixtureSummary ? s.fixtureSummary() : Promise.resolve(null)), [], { interval: 60_000 });
+  const fx = fixtures.data;
+  const fixtureTotal = fx ? fx.resources + fx.approvers + fx.agents + fx.requests : 0;
+  const toggleFixtures = () => {
+    const next = !showFixtures;
+    source.setShowFixtures?.(next);
+    setShowFixtures(next);
+    bump();
+  };
   const pending = useQuery((s) => s.requests({ states: ["PendingApproval"], limit: 20 }), [], { interval: 10_000 });
   useEffect(() => {
     if (ov.data) setClockOffset(ov.data.now_ms - Date.now());
@@ -99,6 +109,24 @@ export function Shell({ path, query }: { path: string; query: URLSearchParams })
         {source.mode === "preview" ? (
           <div className="preview-banner" role="note">
             <strong>Preview — simulated data.</strong> Nothing here touches a network. <a href="#/console/settings">Connect a contract</a> to go live.
+          </div>
+        ) : fx && fixtureTotal > 0 ? (
+          <div className="fixture-banner" role="note">
+            <span className="fixture-tag mono">e2e</span>
+            <span className="fx-short">{showFixtures ? "Test fixtures shown" : `${fixtureTotal} test fixtures hidden`}</span>
+            {showFixtures ? (
+              <span className="fx-long">Showing test fixtures from the live end-to-end run (named <span className="mono">e2e-…</span>).</span>
+            ) : (
+              <span className="fx-long">
+                Hiding test fixtures from the live end-to-end run: {[
+                  fx.resources ? `${fx.resources} test host${fx.resources > 1 ? "s" : ""}` : "",
+                  fx.approvers ? `${fx.approvers} test approver${fx.approvers > 1 ? "s" : ""}` : "",
+                  fx.agents ? `${fx.agents} test agent${fx.agents > 1 ? "s" : ""}` : "",
+                  fx.requests ? `${fx.requests} request${fx.requests > 1 ? "s" : ""}` : "",
+                ].filter(Boolean).join(", ")}.
+              </span>
+            )}
+            <button type="button" className="btn btn-ghost btn-xs" onClick={toggleFixtures}>{showFixtures ? "Hide" : "Show"}</button>
           </div>
         ) : null}
         <header className="topbar">

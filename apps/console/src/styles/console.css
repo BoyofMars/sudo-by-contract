@@ -125,6 +125,41 @@
 .preview-banner strong {
   color: var(--pending);
 }
+.fixture-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 24px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: var(--t-12);
+}
+.fixture-banner .btn {
+  margin-left: auto;
+}
+.fixture-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  font-size: var(--t-11);
+  color: var(--text-3);
+}
+.fixture-banner .fx-short {
+  display: none;
+}
+@media (max-width: 640px) {
+  .fixture-banner {
+    flex-wrap: nowrap;
+  }
+  .fixture-banner .fx-long {
+    display: none;
+  }
+  .fixture-banner .fx-short {
+    display: inline;
+  }
+}
 .topbar {
   position: sticky;
   top: 0;
@@ -195,6 +230,9 @@
   }
   .preview-banner {
     padding: 7px 16px;
+  }
+  .fixture-banner {
+    padding: 6px 16px;
   }
   .content {
     padding: 16px 16px calc(88px + env(safe-area-inset-bottom));
