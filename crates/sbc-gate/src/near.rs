@@ -61,7 +61,13 @@ impl Signer {
 
     pub fn from_key_file(path: &str) -> Result<Signer, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read key {}: {}", path, e))?;
-        let kf: KeyFile = serde_json::from_str(&text).map_err(|e| format!("invalid key file {}: {}", path, e))?;
+        Self::from_key_json(&text).map_err(|e| format!("invalid key file {}: {}", path, e))
+    }
+
+    /// Parse a NEAR CLI key file. Tolerates a UTF-8 byte-order mark and
+    /// surrounding whitespace, which Windows editors and pipes add.
+    pub fn from_key_json(text: &str) -> Result<Signer, String> {
+        let kf: KeyFile = serde_json::from_str(text.trim_start_matches('\u{feff}').trim()).map_err(|e| e.to_string())?;
         Signer::from_secret(&kf.account_id, &kf.private_key)
     }
 
@@ -286,6 +292,15 @@ mod tests {
         let s2 = Signer::from_secret(&kf.account_id, &kf.private_key).unwrap();
         assert_eq!(s.public_key_string(), s2.public_key_string());
         assert!(Signer::from_secret("x", "ed25519:3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy").is_err());
+    }
+
+    #[test]
+    fn key_file_tolerates_bom_and_crlf() {
+        let s = Signer::generate("sbc.testnet");
+        let json = serde_json::to_string_pretty(&s.key_file()).unwrap();
+        let windows = format!("\u{feff}{}\r\n", json.replace('\n', "\r\n"));
+        assert_eq!(Signer::from_key_json(&windows).unwrap().public_key_string(), s.public_key_string());
+        assert!(Signer::from_key_json("\u{feff}").is_err());
     }
 
     #[test]
