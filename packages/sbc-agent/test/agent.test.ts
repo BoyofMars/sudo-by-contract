@@ -23,8 +23,8 @@ function req(id: number, state: AccessRequest["state"], extra: Partial<AccessReq
   };
 }
 
-async function stubAgent(states: AccessRequest[]) {
-  const calls: { requestAccess: RequestAccessArgs[]; cancel: number[]; contexts: unknown[] } = { requestAccess: [], cancel: [], contexts: [] };
+async function stubAgent(states: AccessRequest[], opts: { relayDown?: boolean } = {}) {
+  const calls: { requestAccess: RequestAccessArgs[]; cancel: number[]; contexts: unknown[]; warnings: string[] } = { requestAccess: [], cancel: [], contexts: [], warnings: [] };
   let i = 0;
   const k = await generateKeyMaterial();
   const contract = {
@@ -60,8 +60,11 @@ async function stubAgent(states: AccessRequest[]) {
     agentSecretKey: secretKeyToString(k),
     stateDir: mkdtempSync(join(tmpdir(), "sbc-agent-")),
     contract,
-    relay: { postContext: async (doc) => (calls.contexts.push(doc), "ab".repeat(32)) },
+    relay: opts.relayDown
+      ? { postContext: async () => { throw new TypeError("fetch failed"); } }
+      : { postContext: async (doc) => (calls.contexts.push(doc), "ab".repeat(32)) },
     pollIntervalMs: 1,
+    onWarning: (m) => calls.warnings.push(m),
   });
   return { agent, calls, publicKey: publicKeyToString(k.publicKey) };
 }
@@ -124,6 +127,15 @@ test("request: ephemeral key on disk, private context hashed, only hash + short 
   assert.match(readFileSync(cap.keyPath, "utf8"), /BEGIN OPENSSH PRIVATE KEY/);
   assert.ok(existsSync(join(cap.dir, "meta.json")));
   assert.deepEqual((calls.contexts[0] as any).evidence, [{ label: "Error rate", value: "18%" }]);
+});
+
+test("request: a relay outage never blocks authorisation; evidence stays local and the agent is warned", async () => {
+  const { agent, calls } = await stubAgent([req(41, "PendingApproval")], { relayDown: true });
+  const cap = await agent.request({ resource: "prod-web-02", action: "service.restart:checkout-api", duration: "10m", reason: "r", evidence: [{ label: "e", value: "v" }] });
+  assert.equal(cap.id, 41);
+  assert.equal(calls.requestAccess[0].context_hash, null);
+  assert.equal(calls.warnings.length, 1);
+  assert.match(calls.warnings[0], /relay unavailable \(fetch failed\)/);
 });
 
 test("wait: reports transitions, writes the certificate when Active", async () => {

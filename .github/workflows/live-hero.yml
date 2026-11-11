@@ -68,17 +68,22 @@ jobs:
           $COMPOSE exec -T demo-server cat /etc/sbc/ssh/sbc_user_ca.pub
           echo "--- heartbeat:"
           $COMPOSE exec -T demo-server /usr/local/sbin/sbc-gate sync
+          echo "--- relay:"
+          for i in $(seq 1 30); do curl -sf http://localhost:8787/v1/health && break; sleep 2; done
 
       - name: Deploy Agent — approve request in the console when asked
         env:
           SBC_AGENT_KEY: ${{ secrets.SBC_AGENT_KEY }}
-        run: $COMPOSE run --rm -T agent --scenario "${{ inputs.scenario }}"
+        # --no-deps: leave the running host and relay exactly as booted
+        run: $COMPOSE run --rm --no-deps -T agent --scenario "${{ inputs.scenario }}"
 
       - name: What prod-web-02 saw
         if: always()
         run: |
           $COMPOSE exec -T demo-server sh -c 'tail -n 40 /var/log/supervisor/sbc-sync.log; echo "--- checkout-api:"; tail -n 20 /var/log/supervisor/checkout-api.log' || true
           $COMPOSE logs --no-color --tail 120 demo-server || true
+          echo "--- relay (redacted gate reports, never in the authorisation path):"
+          $COMPOSE logs --no-color --tail 60 relay || true
 
       - name: Summary (read back from the contract)
         if: always()

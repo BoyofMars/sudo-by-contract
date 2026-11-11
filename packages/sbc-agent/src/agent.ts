@@ -55,6 +55,8 @@ export interface SudoAgentOptions {
   relay?: RelayLike;
   sshBinary?: string;
   pollIntervalMs?: number;
+  /** Non-fatal problems, e.g. the relay was unreachable and evidence stayed local. */
+  onWarning?: (message: string) => void;
 }
 
 export type ActionSpec = string | { kind: string; target: string };
@@ -222,8 +224,10 @@ export class SudoAgent {
   private relayOverride?: RelayLike;
   private signerP?: Promise<Signer>;
   private agentIdP?: Promise<string>;
+  private warn: (message: string) => void;
 
   constructor(o: SudoAgentOptions) {
+    this.warn = o.onWarning ?? ((m) => console.warn(`sbc-agent: ${m}`));
     this.contractId = o.contractId;
     this.stateDir = o.stateDir;
     this.secret = o.agentSecretKey;
@@ -297,11 +301,17 @@ export class SudoAgent {
     writePrivateFile(join(pending, "id_ed25519"), opensshPrivateKey(key, `sbc-ephemeral ${action}`));
     writeFileSync(join(pending, "id_ed25519.pub"), sshPublicKeyLine(key.publicKey, "sbc-ephemeral") + "\n");
 
-    // 2. private context (evidence, full rationale) stays off-chain; only its hash goes on-chain
+    // 2. private context (evidence, full rationale) stays off-chain; only its hash goes on-chain.
+    //    The relay is never in the authorisation path: if it is down, the
+    //    request goes ahead with its on-chain reason and no evidence link.
     let contextHash: string | null = null;
     const relay = this.relay();
     if (relay) {
-      contextHash = await relay.postContext({ rationale: o.reason, evidence: o.evidence ?? [], ...(o.links ? { links: o.links } : {}) });
+      try {
+        contextHash = await relay.postContext({ rationale: o.reason, evidence: o.evidence ?? [], ...(o.links ? { links: o.links } : {}) });
+      } catch (e) {
+        this.warn(`relay unavailable (${e instanceof Error ? e.message : e}); requesting without private evidence`);
+      }
     }
 
     // 3. the on-chain request

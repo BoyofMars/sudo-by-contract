@@ -42,7 +42,14 @@ function agentFromEnv(): SudoAgent {
     say("Set SBC_CONTRACT and SBC_AGENT_KEY (or SBC_AGENT_KEY_FILE). See sandbox/README.md.");
     process.exit(2);
   }
-  return new SudoAgent({ contractId, rpcUrl: env.SBC_RPC, relayUrl: env.SBC_RELAY, agentSecretKey: secret, stateDir: env.SBC_STATE_DIR ?? join(tmpdir(), "sbc-demo-agent") });
+  return new SudoAgent({
+    contractId,
+    rpcUrl: env.SBC_RPC,
+    relayUrl: env.SBC_RELAY,
+    agentSecretKey: secret,
+    stateDir: env.SBC_STATE_DIR ?? join(tmpdir(), "sbc-demo-agent"),
+    onWarning: (m) => say(`    ${style.yellow("!")} ${style.dim(m)}`),
+  });
 }
 
 interface Health {
