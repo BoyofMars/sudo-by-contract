@@ -9,5 +9,8 @@
   },
   "scripts": {
     "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0"
   }
 }

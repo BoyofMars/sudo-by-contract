@@ -20,6 +20,7 @@
     "apps/relay/src/**/*.ts",
     "apps/relay/test/**/*.ts",
     "apps/demo-agent/src/**/*.ts",
+    "apps/demo-agent/test/**/*.ts",
     "apps/sbc-mcp/src/**/*.ts",
     "apps/sbc-mcp/test/**/*.ts",
     "scripts/**/*.ts"

@@ -65,6 +65,10 @@ services:
       SBC_HEALTH_URL: http://demo-server:8080/health
       SBC_CONSOLE_URL: ${SBC_CONSOLE_URL:-http://localhost:5180}
       FORCE_COLOR: ${FORCE_COLOR:-}
+      # --scenario injection: a real model works the incident
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SBC_LLM_MODEL: ${SBC_LLM_MODEL:-}
+      SBC_APPROVAL_TIMEOUT_S: ${SBC_APPROVAL_TIMEOUT_S:-}
     depends_on: [demo-server, relay]
     profiles: ["agent"]
 

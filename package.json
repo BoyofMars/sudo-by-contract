@@ -14,7 +14,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test \"packages/*/test/*.test.ts\" \"apps/sudoctl/test/*.test.ts\" \"apps/relay/test/*.test.ts\" \"apps/sbc-mcp/test/*.test.ts\"",
+    "test": "node --test \"packages/*/test/*.test.ts\" \"apps/sudoctl/test/*.test.ts\" \"apps/relay/test/*.test.ts\" \"apps/sbc-mcp/test/*.test.ts\" \"apps/demo-agent/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify:live": "node scripts/verify-live.ts",
     "judge": "node scripts/judge.ts",

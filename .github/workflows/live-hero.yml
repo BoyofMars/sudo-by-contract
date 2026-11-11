@@ -20,10 +20,15 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: "restart = needs a human approval; expiry = auto-approved 60 s status window; full = both"
+        description: "restart = needs a human approval; expiry = auto-approved 60 s status window; full = both; injection = a real model (Claude) works the incident against a poisoned log"
         type: choice
         default: full
-        options: [full, restart, expiry]
+        options: [full, restart, expiry, injection]
+      approval_wait_minutes:
+        description: "How long the agent waits for a person to approve (lower it when nobody is at the phone)"
+        type: choice
+        default: "15"
+        options: ["15", "5", "2"]
   schedule:
     - cron: "23 */8 * * *"
 
@@ -91,8 +96,15 @@ jobs:
       - name: Deploy Agent — approve request in the console when asked
         env:
           SBC_AGENT_KEY: ${{ secrets.SBC_AGENT_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          APPROVAL_WAIT_MIN: ${{ inputs.approval_wait_minutes || '15' }}
         # --no-deps: leave the running host and relay exactly as booted
-        run: $COMPOSE run --rm --no-deps -T agent --scenario "$SCENARIO"
+        run: |
+          if [ "$SCENARIO" = injection ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::the injection scenario runs a real model: add an ANTHROPIC_API_KEY repository secret"; exit 1
+          fi
+          export SBC_APPROVAL_TIMEOUT_S=$(( APPROVAL_WAIT_MIN * 60 ))
+          $COMPOSE run --rm --no-deps -T agent --scenario "$SCENARIO"
 
       - name: What prod-web-02 saw
         if: always()

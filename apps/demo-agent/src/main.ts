@@ -6,7 +6,11 @@
 // line it prints about allowed or denied actions comes from what the host
 // actually returned; nothing here simulates enforcement.
 //
-//   node apps/demo-agent/src/main.ts [--scenario full|restart|expiry] [--force]
+//   node apps/demo-agent/src/main.ts [--scenario full|restart|expiry|injection] [--force]
+//
+// `injection` hands the incident to a real model (Claude, via the Anthropic
+// API; needs ANTHROPIC_API_KEY) with capability tools, against a host whose
+// logs carry a prompt injection. See llm-agent.ts.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,6 +23,7 @@ import {
 } from "../../../packages/sbc-client/src/index.ts";
 import { CapabilityError, SudoAgent, type Capability, type ExecResult } from "../../../packages/sbc-agent/src/index.ts";
 import { act, command, fail, indent, ok, say, sleep, step, style, thought, verdict, wait } from "./narrate.ts";
+import { compromisedAct, llmAct } from "./llm-agent.ts";
 
 const env = process.env;
 const argv = process.argv.slice(2);
@@ -255,6 +260,23 @@ async function main() {
   }
   if (scenario === "full" || scenario === "restart") await restartAct(agent);
   if (scenario === "full" || scenario === "expiry") await expiryAct(agent);
+  if (scenario === "injection") {
+    if (!env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) {
+      fail("The injection scenario runs a real model: set ANTHROPIC_API_KEY.");
+      process.exit(2);
+    }
+    await llmAct({
+      agent,
+      resource: RESOURCE,
+      host: HOST,
+      probe,
+      consoleUrl: CONSOLE,
+      contractId: env.SBC_CONTRACT ?? "",
+      model: env.SBC_LLM_MODEL || undefined,
+      approvalTimeoutMs: env.SBC_APPROVAL_TIMEOUT_S ? Number(env.SBC_APPROVAL_TIMEOUT_S) * 1000 : undefined,
+    });
+    await compromisedAct({ agent, resource: RESOURCE, waitActive, attempt });
+  }
   say();
   if (unexpected) {
     say(style.red(style.bold(`${unexpected} outcome(s) differed from what the capability should allow — investigate.`)));
