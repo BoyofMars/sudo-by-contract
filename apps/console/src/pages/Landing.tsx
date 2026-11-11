@@ -111,7 +111,7 @@ export function Landing() {
           </div>
           {LIVE_CONTRACT ? (
             <p className="hero-live small">
-              <span className="live-dot" aria-hidden /> Live on NEAR testnet · <a href={`#/console?contract=${LIVE_CONTRACT}`} className="mono">{LIVE_CONTRACT}</a> · <a href="#/console">console demo</a>
+              <span className="live-dot" aria-hidden /> Live on NEAR testnet · <a href={`#/console?contract=${LIVE_CONTRACT}`} className="mono">{LIVE_CONTRACT}</a> · <a href="#/console?preview=1">interactive simulation</a>
             </p>
           ) : null}
           <ul className="hero-proof">

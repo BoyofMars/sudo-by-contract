@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Icon, Mark } from "../components/Icon.tsx";
 import { cx } from "../components/ui.tsx";
 import { useData, useQuery } from "../lib/data/context.tsx";
+import { LIVE_CONTRACT } from "../lib/config.ts";
 import { match } from "../lib/router.tsx";
 import { useTheme } from "../lib/hooks.ts";
 import { Overview } from "./console/Overview.tsx";
@@ -74,6 +75,7 @@ export function Shell({ path, query }: { path: string; query: URLSearchParams })
   else page = <Overview />;
 
   const who = identity?.binding ? `${identity.binding.principal} · ${identity.binding.role.toLowerCase()}` : identity?.publicKey ? "key not enrolled" : "read-only";
+  const readOnly = !identity?.binding;
 
   return (
     <div className="shell">
@@ -108,27 +110,39 @@ export function Shell({ path, query }: { path: string; query: URLSearchParams })
       <div className="main">
         {source.mode === "preview" ? (
           <div className="preview-banner" role="note">
-            <strong>Preview — simulated data.</strong> Nothing here touches a network. <a href="#/console/settings">Connect a contract</a> to go live.
+            <strong>Simulation.</strong> <span className="fx-long">Nothing here touches a network: approve, deny and revoke freely.</span>{" "}
+            {LIVE_CONTRACT ? <a href={`#/console?contract=${LIVE_CONTRACT}`}>Back to the live contract</a> : <a href="#/console/settings">Connect a contract</a>}
           </div>
-        ) : fx && fixtureTotal > 0 ? (
-          <div className="fixture-banner" role="note">
-            <span className="fixture-tag mono">e2e</span>
-            <span className="fx-short">{showFixtures ? "Test fixtures shown" : `${fixtureTotal} test fixtures hidden`}</span>
-            {showFixtures ? (
-              <span className="fx-long">Showing test fixtures from the live end-to-end run (named <span className="mono">e2e-…</span>).</span>
-            ) : (
-              <span className="fx-long">
-                Hiding test fixtures from the live end-to-end run: {[
-                  fx.resources ? `${fx.resources} test host${fx.resources > 1 ? "s" : ""}` : "",
-                  fx.approvers ? `${fx.approvers} test approver${fx.approvers > 1 ? "s" : ""}` : "",
-                  fx.agents ? `${fx.agents} test agent${fx.agents > 1 ? "s" : ""}` : "",
+        ) : (
+          <div className="live-banner" role="note">
+            <span className="live-chip"><span className="live-dot" aria-hidden /> Live</span>
+            <span className="lb-text">
+              <span className="fx-long">{readOnly ? `Read-only view of ${source.contractId} on NEAR ${source.network}. Every row is read from the chain.` : `Every row is read from ${source.contractId} on NEAR ${source.network}.`}</span>
+              <span className="fx-short">NEAR {source.network}{readOnly ? " · read-only" : ""}</span>
+            </span>
+            {fx && fixtureTotal > 0 ? (
+              <span
+                className="lb-fx"
+                title={`Test fixtures from the live end-to-end run (named e2e-…): ${[
+                  fx.resources ? `${fx.resources} host${fx.resources > 1 ? "s" : ""}` : "",
+                  fx.approvers ? `${fx.approvers} approver${fx.approvers > 1 ? "s" : ""}` : "",
+                  fx.agents ? `${fx.agents} agent${fx.agents > 1 ? "s" : ""}` : "",
                   fx.requests ? `${fx.requests} request${fx.requests > 1 ? "s" : ""}` : "",
-                ].filter(Boolean).join(", ")}.
+                ].filter(Boolean).join(", ")}`}
+              >
+                <span className="fixture-tag mono">e2e</span>
+                <span>{showFixtures ? "shown" : `${fixtureTotal} hidden`}</span>
+                <button type="button" className="btn btn-ghost btn-xs" onClick={toggleFixtures}>{showFixtures ? "Hide" : "Show"}</button>
               </span>
-            )}
-            <button type="button" className="btn btn-ghost btn-xs" onClick={toggleFixtures}>{showFixtures ? "Hide" : "Show"}</button>
+            ) : null}
+            {readOnly ? (
+              <a className="btn btn-secondary btn-xs lb-sim" href="#/console?preview=1">
+                <span className="fx-long">Try the simulation</span>
+                <span className="fx-short">Simulation</span>
+              </a>
+            ) : null}
           </div>
-        ) : null}
+        )}
         <header className="topbar">
           <a className="brand brand-mobile" href="#/">
             <Mark size={18} />

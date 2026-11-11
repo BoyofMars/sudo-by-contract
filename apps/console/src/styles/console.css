@@ -125,39 +125,72 @@
 .preview-banner strong {
   color: var(--pending);
 }
-.fixture-banner {
+/* live data strip: what you are looking at, and the way to the simulation */
+.live-banner {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  padding: 6px 24px;
+  gap: 8px 12px;
+  min-height: 34px;
+  padding: 4px 24px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
   color: var(--text-2);
   font-size: var(--t-12);
 }
-.fixture-banner .btn {
+.live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--active);
+  letter-spacing: 0.02em;
+}
+.live-chip .live-dot {
+  width: 6px;
+  height: 6px;
+}
+.lb-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb-fx {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
+  white-space: nowrap;
+}
+.lb-sim {
+  white-space: nowrap;
 }
 .fixture-tag {
-  padding: 1px 6px;
+  padding: 0 5px;
   border: 1px solid var(--line-strong);
   border-radius: 4px;
   font-size: var(--t-11);
   color: var(--text-3);
 }
-.fixture-banner .fx-short {
+.live-banner .fx-short,
+.preview-banner .fx-short {
   display: none;
 }
 @media (max-width: 640px) {
-  .fixture-banner {
-    flex-wrap: nowrap;
+  .live-banner {
+    padding: 4px 16px;
+    gap: 8px;
   }
-  .fixture-banner .fx-long {
+  .live-banner .fx-long,
+  .preview-banner .fx-long {
     display: none;
   }
-  .fixture-banner .fx-short {
+  .live-banner .fx-short {
     display: inline;
+  }
+  /* the top bar already names the contract */
+  .live-banner .lb-text {
+    display: none;
   }
 }
 .topbar {
@@ -230,9 +263,6 @@
   }
   .preview-banner {
     padding: 7px 16px;
-  }
-  .fixture-banner {
-    padding: 6px 16px;
   }
   .content {
     padding: 16px 16px calc(88px + env(safe-area-inset-bottom));

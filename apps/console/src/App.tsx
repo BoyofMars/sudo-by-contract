@@ -12,14 +12,16 @@ import { Shell } from "./pages/Shell.tsx";
 
 export function App() {
   const route = useRoute();
-  // Re-resolve when a link switches contract or preview within an open page
-  // (hash-only navigation does not reload the app).
-  const urlContract = route.query.get("contract");
-  const urlPreview = route.query.get("preview");
-  const source = useMemo(() => {
-    const cfg = resolveConfig();
-    return cfg.contractId ? new LiveSource(cfg.contractId, cfg.rpcUrl, cfg.relayUrl) : new PreviewSource();
-  }, [urlContract, urlPreview]);
+  // Resolve on every navigation (hash-only navigation does not reload the
+  // app), but keep the same source while the effective connection is
+  // unchanged, so the simulation keeps its state across pages.
+  const cfg = resolveConfig();
+  const connKey = cfg.contractId ? `${cfg.contractId}|${cfg.rpcUrl}|${cfg.relayUrl ?? ""}` : "preview";
+  const source = useMemo(
+    () => (cfg.contractId ? new LiveSource(cfg.contractId, cfg.rpcUrl, cfg.relayUrl) : new PreviewSource()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [connKey],
+  );
   // A new page starts at the top (hash navigation keeps the old scroll position).
   useEffect(() => {
     window.scrollTo(0, 0);
