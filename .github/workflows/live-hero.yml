@@ -69,7 +69,10 @@ jobs:
           echo "--- heartbeat:"
           $COMPOSE exec -T demo-server /usr/local/sbin/sbc-gate sync
           echo "--- relay:"
-          for i in $(seq 1 30); do curl -sf http://localhost:8787/v1/health && break; sleep 2; done
+          ok=0
+          for i in $(seq 1 30); do if curl -sf http://localhost:8787/v1/health; then ok=1; break; fi; sleep 2; done
+          echo
+          if [ "$ok" != 1 ]; then echo "::warning::relay is not healthy; the agent will request without private evidence"; $COMPOSE logs --no-color --tail 30 relay; fi
 
       - name: Deploy Agent — approve request in the console when asked
         env:

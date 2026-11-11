@@ -12,6 +12,8 @@ COPY apps/demo-agent ./apps/demo-agent
 COPY apps/sudoctl ./apps/sudoctl
 COPY apps/sbc-mcp ./apps/sbc-mcp
 ENV NODE_NO_WARNINGS=1 SBC_HOME=/state
-RUN mkdir -p /state && chown node:node /state
+# /data is the relay's database volume (compose); a fresh named volume takes
+# the ownership of the image directory it is mounted on.
+RUN mkdir -p /state /data && chown node:node /state /data
 VOLUME ["/state"]
 USER node
