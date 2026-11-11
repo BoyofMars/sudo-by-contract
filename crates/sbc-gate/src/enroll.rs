@@ -19,7 +19,11 @@ pub const SSHD_DROPIN: &str = "/etc/ssh/sshd_config.d/50-sbc.conf";
 pub struct EnrollOpts {
     pub contract: String,
     pub resource: String,
-    pub token: String,
+    /// One-time enrollment token. Without it, `key_file` must already be the
+    /// resource's enrolled gate key (re-provisioning a host from its key).
+    pub token: Option<String>,
+    /// Use this gate key instead of generating one.
+    pub key_file: Option<PathBuf>,
     pub rpc: String,
     pub relay: Option<String>,
     pub backend: Backend,
@@ -141,7 +145,9 @@ pub fn write_krl(krl_file: &str, ca_file: &str, serials: &[u64]) -> Result<(), S
 pub fn enroll(o: EnrollOpts) -> Result<(), String> {
     println!("Enrolling resource {} with policy contract {}", o.resource, o.contract);
     let rpc = Rpc::new(&o.rpc, 30);
-    let token = Signer::from_secret(&o.contract, &o.token)?;
+    if o.token.is_none() && o.key_file.is_none() {
+        return Err("missing --token (or --key-file with this resource's already-enrolled gate key)".into());
+    }
 
     println!("  • Looking up resource and environment CA …");
     let res = rpc
@@ -163,19 +169,48 @@ pub fn enroll(o: EnrollOpts) -> Result<(), String> {
     sbc_core::ssh::parse_ed25519_pubkey_line(&ca_line).map_err(|e| format!("bad CA line from contract: {}", e))?;
     println!("    environment {}  CA {}", environment, ca_line.split_whitespace().take(2).collect::<Vec<_>>().join(" ").chars().take(60).collect::<String>() + "…");
 
-    println!("  • Generating this host's gate key (never leaves the host) …");
-    let gate = Signer::generate(&o.contract);
-    let fingerprint = host_fingerprint(&o.ssh_dir);
-    let meta = json!({ "gate_version": env!("CARGO_PKG_VERSION"), "host_fingerprint": fingerprint });
+    let gate = match &o.key_file {
+        Some(path) => {
+            println!("  • Loading gate key from {} …", path.display());
+            let s = Signer::from_key_file(&path.display().to_string())?;
+            if s.account_id != o.contract {
+                return Err(format!("{} is a key for {}, not {}", path.display(), s.account_id, o.contract));
+            }
+            s
+        }
+        None => {
+            println!("  • Generating this host's gate key (never leaves the host) …");
+            Signer::generate(&o.contract)
+        }
+    };
 
-    println!("  • Exchanging the one-time enrollment token for the gate key …");
-    let r: Value = rpc
-        .function_call(&token, &o.contract, "complete_enrollment", &json!({ "new_public_key": gate.public_key_string(), "meta": meta }), 50 * TGAS)
-        .map_err(|e| format!("enrollment rejected: {}", e))?;
-    if r.get("ok").and_then(Value::as_bool) != Some(true) {
-        return Err(format!("enrollment rejected: {}", r.get("message").and_then(Value::as_str).unwrap_or("unknown")));
+    match &o.token {
+        Some(t) => {
+            let token = Signer::from_secret(&o.contract, t)?;
+            let fingerprint = host_fingerprint(&o.ssh_dir);
+            let meta = json!({ "gate_version": env!("CARGO_PKG_VERSION"), "host_fingerprint": fingerprint });
+            println!("  • Exchanging the one-time enrollment token for the gate key …");
+            let r: Value = rpc
+                .function_call(&token, &o.contract, "complete_enrollment", &json!({ "new_public_key": gate.public_key_string(), "meta": meta }), 50 * TGAS)
+                .map_err(|e| format!("enrollment rejected: {}", e))?;
+            if r.get("ok").and_then(Value::as_bool) != Some(true) {
+                return Err(format!("enrollment rejected: {}", r.get("message").and_then(Value::as_str).unwrap_or("unknown")));
+            }
+            println!("    bound {} as Gate for {}", gate.public_key_string(), o.resource);
+        }
+        None => {
+            // Re-provisioning: nothing changes on-chain. The key must already
+            // be the one the contract holds for this resource.
+            if res["gate_key"].as_str() != Some(gate.public_key_string().as_str()) {
+                return Err(format!(
+                    "{} is not the enrolled gate key for {}; enroll with a one-time --token",
+                    gate.public_key_string(),
+                    o.resource
+                ));
+            }
+            println!("    {} is already bound as Gate for {}; no token needed", gate.public_key_string(), o.resource);
+        }
     }
-    println!("    bound {} as Gate for {}", gate.public_key_string(), o.resource);
 
     let ca_file = o.ssh_dir.join("sbc_user_ca.pub");
     let krl_file = o.ssh_dir.join("sbc_revoked.krl");

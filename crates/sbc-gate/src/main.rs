@@ -1,4 +1,4 @@
-﻿//! sbc-gate â€” the Sudo by Contract enforcement point on an enrolled host.
+﻿//! sbc-gate — the Sudo by Contract enforcement point on an enrolled host.
 //!
 //! Invoked with no arguments by sshd (`ForceCommand`), it executes exactly
 //! one approved typed action or refuses. Other subcommands are for operators.
@@ -7,18 +7,22 @@ use sbc_gate::config::{Backend, GateConfig, DEFAULT_CONFIG};
 use sbc_gate::{adapters, enroll, exec};
 use std::path::PathBuf;
 
-const HELP: &str = "sbc-gate â€” Sudo by Contract host gate
+const HELP: &str = "sbc-gate — Sudo by Contract host gate
 
 USAGE
   sbc-gate                      Forced command for sshd (reads SSH_ORIGINAL_COMMAND, SSH_USER_AUTH)
   sbc-gate enroll --contract <id> --resource <id> --token <ed25519:...>
-                  [--rpc URL] [--relay URL] [--backend systemd|supervisor]
-                  [--config-dir /etc/sbc] [--ssh-dir /etc/ssh]
+                  [--key-file <gate.key>] [--rpc URL] [--relay URL]
+                  [--backend systemd|supervisor] [--config-dir /etc/sbc] [--ssh-dir /etc/ssh]
                   [--write-sshd] [--write-sudoers] [--dry-run]
+                  With --key-file and no --token, re-provisions a host whose gate key
+                  is already enrolled for the resource (nothing changes on-chain).
   sbc-gate sync                 Heartbeat, refresh the revocation list (KRL), check CA pin
   sbc-gate check <command...>   Show how a command line maps to a typed action (no execution)
   sbc-gate sudoers              Print the exact sudoers rules for this host's services
   sbc-gate sshd-config          Print the sshd drop-in for this host's configuration
+  sbc-gate keygen --account <contract> --out <file>
+                                Generate a gate key file and print its public key
   sbc-gate version
 
 ENVIRONMENT
@@ -65,7 +69,7 @@ fn main() {
                     0
                 }
                 Err(r) => {
-                    println!("rejected {} â€” {}", r.code(), r.message());
+                    println!("rejected {} — {}", r.code(), r.message());
                     exec::EXIT_NOT_AUTHORISABLE
                 }
             }
@@ -134,14 +138,14 @@ fn run_exec() -> i32 {
     let cfg = match GateConfig::load(&config_path()) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("sbc-gate: DENIED (gate_misconfigured) {} â€” failing closed", e);
+            eprintln!("sbc-gate: DENIED (gate_misconfigured) {} — failing closed", e);
             return exec::EXIT_CONFIG;
         }
     };
     let gate = match exec::Gate::load(cfg) {
         Ok(g) => g,
         Err(e) => {
-            eprintln!("sbc-gate: DENIED (gate_misconfigured) {} â€” failing closed", e);
+            eprintln!("sbc-gate: DENIED (gate_misconfigured) {} — failing closed", e);
             return exec::EXIT_CONFIG;
         }
     };
@@ -154,7 +158,8 @@ fn run_enroll(args: &[String]) -> i32 {
         Ok(enroll::EnrollOpts {
             contract: req("--contract")?,
             resource: req("--resource")?,
-            token: req("--token")?,
+            token: flag(args, "--token"),
+            key_file: flag(args, "--key-file").map(PathBuf::from),
             rpc: flag(args, "--rpc").unwrap_or_else(|| "https://rpc.testnet.fastnear.com".into()),
             relay: flag(args, "--relay"),
             backend: match flag(args, "--backend").as_deref() {
