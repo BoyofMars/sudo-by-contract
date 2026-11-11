@@ -109,11 +109,15 @@ Pages talk to one `DataSource` interface (`src/lib/data/source.ts`):
   when no contract is configured. It evaluates requests with a TypeScript
   mirror of the contract's policy logic (`src/lib/policyEval.ts`) and issues
   structurally real OpenSSH certificates signed by a throwaway in-browser key.
-  Every preview surface carries the "Preview — simulated data" banner.
+  Every preview surface carries the "Simulation" banner with a way back to the
+  live contract.
 
 Config resolution: `?contract=&rpc=&relay=` (query or hash query) →
-`localStorage` → `VITE_SBC_CONTRACT` / `VITE_SBC_RPC` / `VITE_SBC_RELAY`.
-`?preview=1` forces the simulation.
+`localStorage` → `VITE_SBC_CONTRACT` / `VITE_SBC_RPC` / `VITE_SBC_RELAY`. The
+hosted build sets `VITE_SBC_CONTRACT`, so visitors land on the live contract
+(read-only, under a "Live" strip that also hides `e2e-*` test fixtures behind a
+toggle). `?preview=1` switches to the simulation for the rest of the tab
+session; `?preview=0` or any `?contract=` switches back.
 
 ### Device keys (how humans authenticate)
 

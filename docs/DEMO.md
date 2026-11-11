@@ -7,7 +7,7 @@
 |---|---|---|
 | Request | Deploy Agent probes `checkout-api` (error rate 1.2% → 18% after deploy #1842), generates a fresh SSH key, posts its evidence privately to the relay, and calls `request_access(prod-web-02, service.restart:checkout-api, 10m, 1 use)` with the evidence hash. | Contract: policy `prod-remediation` matches; 1 approval required. |
 | Review | The console shows WHO / WHY (rationale ✓ matches on-chain hash) / WHAT (`sudo systemctl restart checkout-api`) / WHERE / WINDOW / USES / POLICY / RISK and the policy evaluation (✓ identity, ✓ environment, ✓ action, ✓ target, ✓ 10m ≤ 15m, ○ approval). | — |
-| Approve | One tap on **Approve 10 min** (a non-extractable device key signs `approve`). | Contract builds the certificate body; NEAR MPC signs it; contract verifies and issues. |
+| Approve | One tap on **Approve 10m** (a non-extractable device key signs `approve`). | Contract builds the certificate body; NEAR MPC signs it; contract verifies and issues. |
 | Execute | `sudo systemctl restart checkout-api` → **✓ allowed**, service recovers. | sshd (CA, principal, window) → sbc-gate (grammar, host ceiling) → `consume` (scope, uses) → exact sudoers line. |
 | Escalate | `sudo cat /etc/shadow` → **✕ denied** (no adapter: not an action anyone can authorise). | sbc-gate grammar; denial recorded on-chain with program + hash. |
 | Escalate | `sudo systemctl restart sshd` → **✕ denied** (capability permits only `service.restart:checkout-api`). | `consume` on-chain. |
@@ -16,6 +16,17 @@
 
 None of the denials come from a UI. They come from OpenSSH, the gate binary and the
 contract, and every one of them is in the audit trail.
+
+## Watch it run (no setup)
+
+The [live-hero workflow](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/live-hero.yml)
+runs this scenario on a GitHub runner against the deployed contract and the testnet MPC
+signer. `prod-web-02` there is real OpenSSH plus `sbc-gate` built from the commit,
+re-provisioned from its enrolled gate key (`sbc-gate enroll --key-file`). Every 8 hours it
+runs unattended: the independent deployment check, then the auto-approved 60-second
+status capability (the Expire row). The full scenario, with a person approving on their
+phone, is started by hand. Each run's summary lists the capabilities it created, read
+back from the contract.
 
 ## Option A — Docker sandbox (real sshd, real testnet, real MPC)
 
