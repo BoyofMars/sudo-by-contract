@@ -34,6 +34,8 @@ services:
       <<: *sbc
       SBC_RESOURCE: ${SBC_RESOURCE:-prod-web-02}
       SBC_ENROLL_TOKEN: ${SBC_ENROLL_TOKEN:-}
+      # or: the resource's already-enrolled gate key file (JSON), e.g. in CI
+      SBC_GATE_KEY: ${SBC_GATE_KEY:-}
       SBC_RELAY: http://relay:8787
     volumes:
       - server-sbc:/etc/sbc
@@ -62,6 +64,7 @@ services:
       SBC_HOST: sbc-agent@demo-server:22
       SBC_HEALTH_URL: http://demo-server:8080/health
       SBC_CONSOLE_URL: ${SBC_CONSOLE_URL:-http://localhost:5180}
+      FORCE_COLOR: ${FORCE_COLOR:-}
     depends_on: [demo-server, relay]
     profiles: ["agent"]
 

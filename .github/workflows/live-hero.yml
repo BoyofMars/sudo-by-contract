@@ -1,0 +1,93 @@
+name: live-hero
+
+# The hero scenario against the real deployment, end to end:
+#   * policy contract bagyard-sexton.testnet and the NEAR MPC signer (testnet),
+#   * prod-web-02 = real OpenSSH + sbc-gate, built from this commit, running on
+#     this runner and re-provisioned from its enrolled gate key,
+#   * the Deploy Agent asking for one restart, and a human approving it from
+#     the console while the run waits.
+#
+# Manual only (never on pull requests, so the scoped testnet keys in this
+# repository's secrets are never exposed to forks):
+#   SBC_GATE_KEY   prod-web-02's gate key file (can call consume/heartbeat/report_denial)
+#   SBC_AGENT_KEY  deploy-agent's key (can call request_access/cancel_request)
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "restart = needs a human approval; expiry = auto-approved 60 s status window; full = both"
+        type: choice
+        default: full
+        options: [full, restart, expiry]
+
+concurrency:
+  group: live-hero
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  hero:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SBC_CONTRACT: bagyard-sexton.testnet
+      SBC_RPC: https://rpc.testnet.fastnear.com
+      SBC_RESOURCE: prod-web-02
+      SBC_CONSOLE_URL: https://sudo-by-contract.vercel.app
+      FORCE_COLOR: "1"
+      COMPOSE: docker compose -f sandbox/docker-compose.yml --profile agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        env:
+          SBC_GATE_KEY: ${{ secrets.SBC_GATE_KEY }}
+          SBC_AGENT_KEY: ${{ secrets.SBC_AGENT_KEY }}
+        run: |
+          test -n "$SBC_GATE_KEY" || { echo "::error::SBC_GATE_KEY secret is not set"; exit 1; }
+          test -n "$SBC_AGENT_KEY" || { echo "::error::SBC_AGENT_KEY secret is not set"; exit 1; }
+          echo "STARTED_MS=$(date +%s%3N)" >> "$GITHUB_ENV"
+
+      - name: Build prod-web-02 (sbc-gate from source), relay and agent images
+        run: $COMPOSE build demo-server relay agent
+
+      - name: Boot prod-web-02 — real OpenSSH trusting only the MPC-derived CA
+        env:
+          SBC_GATE_KEY: ${{ secrets.SBC_GATE_KEY }}
+        run: |
+          $COMPOSE up -d relay demo-server
+          for i in $(seq 1 60); do
+            if $COMPOSE exec -T demo-server sh -c 'pgrep -x sshd >/dev/null && test -s /etc/sbc/ssh/sbc_user_ca.pub'; then break; fi
+            sleep 2
+          done
+          $COMPOSE logs --no-color demo-server
+          echo "--- TrustedUserCAKeys on prod-web-02 (the environment CA the MPC network derived for the contract):"
+          $COMPOSE exec -T demo-server cat /etc/sbc/ssh/sbc_user_ca.pub
+          echo "--- heartbeat:"
+          $COMPOSE exec -T demo-server /usr/local/sbin/sbc-gate sync
+
+      - name: Deploy Agent — approve request in the console when asked
+        env:
+          SBC_AGENT_KEY: ${{ secrets.SBC_AGENT_KEY }}
+        run: $COMPOSE run --rm -T agent --scenario "${{ inputs.scenario }}"
+
+      - name: What prod-web-02 saw
+        if: always()
+        run: |
+          $COMPOSE exec -T demo-server sh -c 'tail -n 40 /var/log/supervisor/sbc-sync.log; echo "--- checkout-api:"; tail -n 20 /var/log/supervisor/checkout-api.log' || true
+          $COMPOSE logs --no-color --tail 120 demo-server || true
+
+      - name: Summary (read back from the contract)
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: always()
+        run: node scripts/hero-summary.ts --since "${STARTED_MS:-0}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Tear down
+        if: always()
+        run: $COMPOSE down -v

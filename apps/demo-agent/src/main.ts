@@ -37,7 +37,7 @@ const SERVICE = env.SBC_SERVICE ?? "checkout-api";
 
 function agentFromEnv(): SudoAgent {
   const contractId = env.SBC_CONTRACT;
-  const secret = env.SBC_AGENT_KEY ?? (env.SBC_AGENT_KEY_FILE ? JSON.parse(readFileSync(env.SBC_AGENT_KEY_FILE, "utf8")).private_key : undefined);
+  const secret = (env.SBC_AGENT_KEY || (env.SBC_AGENT_KEY_FILE ? JSON.parse(readFileSync(env.SBC_AGENT_KEY_FILE, "utf8")).private_key : ""))?.trim();
   if (!contractId || !secret) {
     say("Set SBC_CONTRACT and SBC_AGENT_KEY (or SBC_AGENT_KEY_FILE). See sandbox/README.md.");
     process.exit(2);
@@ -108,7 +108,7 @@ async function waitActive(cap: Capability): Promise<AccessRequest | null> {
         if (r.state === "PendingApproval") {
           step("policy", `${style.bold(r.policy_id ?? "?")} v${r.policy_version}: every check passes; ${r.required_approvals} human approval required`);
           for (const c of r.checks) say(`    ${c.ok ? (c.name === "approval" ? style.yellow("○") : style.green("✓")) : style.red("✕")} ${c.name.padEnd(11)} ${style.dim(c.detail)}`);
-          wait(`Waiting for a human to approve request #${r.id}${CONSOLE ? ` — ${CONSOLE.replace(/\/+$/, "")}/#/console/requests/${r.id}` : " (sudoctl approve " + r.id + ")"}`);
+          wait(`Waiting for a human to approve request #${r.id}${CONSOLE ? ` — ${CONSOLE.replace(/\/+$/, "")}/#/console/requests/${r.id}?contract=${encodeURIComponent(env.SBC_CONTRACT ?? "")}` : " (sudoctl approve " + r.id + ")"}`);
         } else if (r.state === "Signing") {
           wait("Approved. Requesting a threshold signature from the NEAR MPC network…");
         }

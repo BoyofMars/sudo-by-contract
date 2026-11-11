@@ -19,14 +19,25 @@ fi
 cp /etc/ssh/keys/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ed25519_key.pub
 
 if [ ! -f /etc/sbc/gate.toml ]; then
-  : "${SBC_ENROLL_TOKEN:?first boot needs SBC_ENROLL_TOKEN (one-time gate enrollment token)}"
-  echo "==> enrolling ${SBC_RESOURCE} with ${SBC_CONTRACT}"
   # CA pin, principals file and KRL live in the /etc/sbc volume (--ssh-dir)
-  set -- --contract "$SBC_CONTRACT" --resource "$SBC_RESOURCE" --token "$SBC_ENROLL_TOKEN" \
+  set -- --contract "$SBC_CONTRACT" --resource "$SBC_RESOURCE" \
          --rpc "$SBC_RPC" --backend supervisor --ssh-dir /etc/sbc/ssh --write-sshd --write-sudoers
   if [ -n "${SBC_RELAY:-}" ]; then set -- "$@" --relay "$SBC_RELAY"; fi
-  /usr/local/sbin/sbc-gate enroll "$@"
+  if [ -n "${SBC_GATE_KEY:-}" ]; then
+    # Re-provision (CI, a rebuilt host): the key is already the resource's
+    # enrolled gate key, so nothing changes on-chain.
+    echo "==> re-provisioning ${SBC_RESOURCE} from its enrolled gate key"
+    (umask 077 && printf '%s\n' "$SBC_GATE_KEY" > /etc/sbc/gate.key.in)
+    /usr/local/sbin/sbc-gate enroll "$@" --key-file /etc/sbc/gate.key.in
+    rm -f /etc/sbc/gate.key.in
+  else
+    : "${SBC_ENROLL_TOKEN:?first boot needs SBC_ENROLL_TOKEN (one-time gate enrollment token) or SBC_GATE_KEY}"
+    echo "==> enrolling ${SBC_RESOURCE} with ${SBC_CONTRACT}"
+    /usr/local/sbin/sbc-gate enroll "$@" --token "$SBC_ENROLL_TOKEN"
+  fi
 fi
+# Credentials are on disk for the gate now; keep them out of child environments.
+unset SBC_GATE_KEY SBC_ENROLL_TOKEN
 
 # Re-derive the sshd drop-in and sudoers rules from the persisted gate.toml
 # whenever the container filesystem was recreated.
