@@ -3,8 +3,10 @@
 Short-lived infrastructure access is a solved problem for *humans inside one
 organisation*. Teleport, Vault, Boundary, StrongDM, Cloudflare Access and the cloud
 providers' JIT tools all do it well, and several are moving fast on AI agents. Sudo by
-Contract does not claim otherwise. It differs in **who has to be trusted** and **who can
-verify it**.
+Contract does not claim otherwise. Short-lived SSH certificates for agents (Ping) and
+per-action checks (StrongDM, Delinea) already exist. It differs in **who has to be trusted**
+and **who can verify it**: in every row below, someone runs the CA or the policy engine;
+here no one holds a CA key and the signing rules are public contract code.
 
 ## What the incumbents do well (and what we learned from them)
 
@@ -18,6 +20,8 @@ verify it**.
 | **Cloudflare Access for Infrastructure**, **Okta Privileged Access**, **Tailscale SSH** | Identity-aware SSH without long-lived keys; command logging; re-authentication ("check mode"). | Vendor control plane / CA. |
 | **AWS SSM + Identity Center**, **GCP PAM + IAP**, **Azure Entra PIM** | JIT role elevation with approvals and expiry; SSM documents restricting commands. | The cloud provider; scoped to that cloud. |
 | **CyberArk** | Vaulting, session isolation, JIT elevation; now positioning identity security for AI agents. | CyberArk vault / SaaS. |
+| **Ping Identity Agent Privilege** | An in-line gateway for MCP and Git with just-in-time, task-scoped access; for Git, agents authenticate with short-lived SSH CA-signed certificates tied to a human identity ([product page](https://www.pingidentity.com/en/product/agent-privilege.html)). | Ping's gateway and CA. |
+| **Delinea** (July 2026) | Runtime authorization for agents: each tool call, command and query is evaluated as it runs and can be approved, blocked or escalated; just-in-time credentials, no standing access ([report](https://www.channelinsider.com/ai/llms-chatbots-and-agents/delinea-ai-agent-runtime-authorization/)). | The Delinea platform. |
 
 Lessons adopted: certificates over keys (Teleport/Vault); never handing over the
 credential (Boundary); per-command decisions (StrongDM); one-time enrollment tokens
