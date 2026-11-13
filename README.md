@@ -87,21 +87,21 @@ agent. Every one is denied, and every denial is on-chain:
 ```mermaid
 sequenceDiagram
     autonumber
-    participant A as AI agent
-    participant C as Policy contract (NEAR)
-    participant H as Approver (phone)
-    participant M as NEAR MPC network
-    participant S as Server (sshd + sbc-gate)
-    A->>C: request_access: restart checkout-api · prod-web-02 · 10 min · 1 use
-    C->>C: evaluate policy (deny wins)
-    H->>C: approve (device key, no wallet)
-    C->>M: sign the certificate body the contract built
-    M-->>C: threshold Ed25519 signature (11 of 16 nodes)
-    C-->>A: short-lived OpenSSH certificate
-    A->>S: ssh with the certificate
-    S->>C: consume(action), before every command
-    C-->>S: allowed, use 1 of 1
-    S-->>A: restarted. Anything else is denied and recorded.
+    participant A as Agent
+    participant C as Contract
+    participant H as Human
+    participant M as NEAR MPC
+    participant S as Server
+    A->>C: ask: restart checkout-api, 10 min, once
+    C->>C: check policy
+    H->>C: approve
+    C->>M: sign certificate
+    M-->>C: signature (11 of 16)
+    C-->>A: SSH certificate
+    A->>S: ssh
+    S->>C: consume(action)
+    C-->>S: allowed, 1 of 1
+    S-->>A: restarted
 ```
 
 ![Authority exists only inside a window: request, evaluate, approve, issue, execute, observe, expire](docs/media/how-it-works.png)
