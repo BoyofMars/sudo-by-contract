@@ -12,6 +12,7 @@ Approved by a contract on NEAR. Signed by NEAR's MPC network.<br>
 [![ci](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-3dd6b5)](LICENSE)
 
+[**▶ Watch the 2-minute demo**](https://x.com/TheBoyOfMars/status/2121227594725011555) ·
 [**Live console**](https://sudo-by-contract.vercel.app/#/console) ·
 [**Verify it yourself**](https://sudo-by-contract.vercel.app/#/proof) ·
 [**Try to escape**](https://sudo-by-contract.vercel.app/#/escape) ·
@@ -20,7 +21,9 @@ Approved by a contract on NEAR. Signed by NEAR's MPC network.<br>
 
 </div>
 
-![A live run: the agent's terminal, the on-chain record of the approval and the MPC-signed certificate 4.3 s later, and the approval on a phone](docs/media/live-demo.png)
+[![A live run: the agent's terminal, the on-chain record of the approval and the MPC-signed certificate 4.3 s later, and the approval on a phone. Click to watch the 2-minute demo.](docs/media/live-demo.png)](https://x.com/TheBoyOfMars/status/2121227594725011555)
+
+<p align="center"><sub>▶ Click the image to watch the 2-minute demo: a real approval on a phone, a real prompt injection, all on NEAR testnet.</sub></p>
 
 ## AI agents are getting the keys to production
 
@@ -239,6 +242,7 @@ others do well and where trust sits in each.
 ## Hackathon
 
 * Built at **NEAR HACKATHON** (November 2026) for the **AI Security & Defense** and **Open Innovation** tracks.
+* **Demo post:** [the 2-minute video and thread on X](https://x.com/TheBoyOfMars/status/2121227594725011555).
 * **All code in this repository was written during the hackathon** (first commit 2026-11-10). No pre-existing code, starter template or boilerplate.
 * **Built with:** Rust: `near-sdk` 5.30 (contract); `ed25519-dalek`, `sha2`, `base64`, `bs58`, `hex`, `serde`/`serde_json`, `toml`, `ureq` (gate). TypeScript on Node 26: borsh, NEAR transactions and OpenSSH encoding are hand-written (`@near-js/crypto` and `@near-js/transactions` are dev-only, to check our bytes match); the only runtime npm dependencies are the model SDKs for the demo agent's model act, `@google/genai` (Gemini) and `@anthropic-ai/sdk` (Claude). Console: React 19, Vite 8, Inter and JetBrains Mono via Fontsource. Tooling: `cargo-near`, `near-cli-rs`, OpenSSH, Docker, GitHub Actions, Vercel.
 * **NEAR integration:** the policy contract runs on NEAR testnet; **NEAR Chain Signatures** (MPC, Ed25519 domain) is the SSH certificate authority, with the CA key derived for the contract's account; **function-call access keys** on the contract account are the identity layer for admins, approvers, agents and hosts; every authorisation event is a NEP-297 event in a hash-chained, on-chain audit log.
