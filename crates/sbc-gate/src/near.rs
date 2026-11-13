@@ -223,16 +223,34 @@ impl Rpc {
             );
             match res {
                 Ok(out) => return interpret_outcome(&out),
-                Err(RpcError::Rpc(m)) if m.contains("Nonce") || m.contains("nonce") => {
-                    // another command on this host used the key concurrently
-                    last_err = Some(RpcError::Rpc(m));
-                    std::thread::sleep(Duration::from_millis(150 * (attempt + 1)));
-                    continue;
-                }
+                Err(RpcError::Rpc(m)) => match retryable_tx_rejection(&m) {
+                    Some(wait_ms) => {
+                        last_err = Some(RpcError::Rpc(m));
+                        std::thread::sleep(Duration::from_millis(wait_ms * (attempt + 1)));
+                        continue;
+                    }
+                    None => return Err(RpcError::Rpc(m)),
+                },
                 Err(e) => return Err(e),
             }
         }
-        Err(last_err.unwrap_or_else(|| RpcError::Rpc("exhausted nonce retries".into())))
+        Err(last_err.unwrap_or_else(|| RpcError::Rpc("exhausted transaction retries".into())))
+    }
+}
+
+/// RPC rejections that mean the transaction was never executed, so resending a
+/// freshly built one is safe; returns the back-off step in milliseconds.
+/// - nonce clash: another command on this host used the key at the same moment;
+/// - `InvalidTxError: Expired`: the block hash came from an RPC node ahead of the
+///   one that received the transaction (load-balanced testnet RPC), which treats
+///   an unknown hash as expired. Waiting lets the nodes converge.
+pub fn retryable_tx_rejection(message: &str) -> Option<u64> {
+    if message.to_ascii_lowercase().contains("nonce") {
+        Some(150)
+    } else if message.contains("InvalidTxError") && message.contains("Expired") {
+        Some(500)
+    } else {
+        None
     }
 }
 
@@ -301,6 +319,18 @@ mod tests {
         let windows = format!("\u{feff}{}\r\n", json.replace('\n', "\r\n"));
         assert_eq!(Signer::from_key_json(&windows).unwrap().public_key_string(), s.public_key_string());
         assert!(Signer::from_key_json("\u{feff}").is_err());
+    }
+
+    #[test]
+    fn only_never_executed_rejections_are_retried() {
+        // the rejection that failed the 2026-11-12 scheduled run
+        let expired = r#"INVALID_TRANSACTION: {"cause":{"info":{},"name":"INVALID_TRANSACTION"},"code":-32000,"data":{"TxExecutionError":{"InvalidTxError":"Expired"}},"message":"Server error","name":"HANDLER_ERROR"}"#;
+        assert_eq!(retryable_tx_rejection(expired), Some(500));
+        assert_eq!(retryable_tx_rejection(r#"INVALID_TRANSACTION: {"InvalidTxError":{"InvalidNonce":{"tx_nonce":8,"ak_nonce":8}}}"#), Some(150));
+        // anything else is final: a bad signature, a missing key, a timeout
+        assert_eq!(retryable_tx_rejection(r#"INVALID_TRANSACTION: {"InvalidTxError":"InvalidSignature"}"#), None);
+        assert_eq!(retryable_tx_rejection("UNKNOWN_ACCESS_KEY: access key does not exist"), None);
+        assert_eq!(retryable_tx_rejection("TIMEOUT_ERROR: transaction not included"), None);
     }
 
     #[test]

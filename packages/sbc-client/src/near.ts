@@ -199,12 +199,29 @@ export class NearRpc {
         });
         return interpretOutcome(r);
       } catch (e) {
-        // concurrent use of the same key: retry with a fresh nonce
-        if (attempt < 3 && e instanceof RpcError && /InvalidNonce|nonce/i.test(e.message)) continue;
-        throw e;
+        // never executed (nonce clash, or a block hash another RPC node hasn't seen yet):
+        // rebuild with a fresh nonce and block hash and resend
+        const waitMs = attempt < 3 ? retryableTxRejection(e) : null;
+        if (waitMs === null) throw e;
+        if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs * (attempt + 1)));
       }
     }
   }
+}
+
+/**
+ * RPC rejections that mean the transaction was never executed, so resending a
+ * freshly built one is safe; returns the back-off step in ms, or null.
+ * - nonce clash: another call used the same key at the same moment (resend at once);
+ * - `InvalidTxError: Expired`: the block hash came from a load-balanced RPC node
+ *   ahead of the one that received the transaction; waiting lets them converge.
+ * Anything else (including timeouts, which may have executed) is never resent.
+ */
+export function retryableTxRejection(e: unknown): number | null {
+  if (!(e instanceof RpcError)) return null;
+  if (/InvalidNonce|nonce/i.test(e.message)) return 0;
+  if (/InvalidTxError\W+Expired/.test(e.message)) return 500;
+  return null;
 }
 
 function interpretOutcome(r: any): TxOutcome {

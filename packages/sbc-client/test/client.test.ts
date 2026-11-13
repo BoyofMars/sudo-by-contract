@@ -24,6 +24,8 @@ import {
   describePolicy,
   formatDuration,
   NearRpc,
+  RpcError,
+  retryableTxRejection,
 } from "../src/index.ts";
 
 test("base58 roundtrip and known vector", () => {
@@ -131,6 +133,44 @@ test("policy sentences read like intent", () => {
     }),
     "deploy-agent may restart checkout-api once on production servers after one human approval. Access expires after 10m.",
   );
+});
+
+test("only rejections that never executed are resent", () => {
+  // the rejection that failed the 2026-11-12 scheduled live run
+  assert.equal(retryableTxRejection(new RpcError('INVALID_TRANSACTION: {"TxExecutionError":{"InvalidTxError":"Expired"}}')), 500);
+  assert.equal(retryableTxRejection(new RpcError('INVALID_TRANSACTION: {"InvalidTxError":{"InvalidNonce":{"tx_nonce":8,"ak_nonce":8}}}')), 0);
+  assert.equal(retryableTxRejection(new RpcError('INVALID_TRANSACTION: {"InvalidTxError":"InvalidSignature"}')), null);
+  assert.equal(retryableTxRejection(new RpcError("TIMEOUT_ERROR: transaction may still execute")), null);
+  assert.equal(retryableTxRejection(new Error("Expired")), null);
+});
+
+test("an Expired rejection is rebuilt with a fresh block hash and resent", async () => {
+  const k = await generateKeyMaterial();
+  const signer = await signerFromSecretString("sbc.testnet", secretKeyToString(k));
+  const blockHashes: string[] = [];
+  let sends = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: string, init: { body: string }) => {
+    const req = JSON.parse(init.body);
+    const reply = (body: unknown) => new Response(JSON.stringify({ jsonrpc: "2.0", id: req.id, ...body as object }), { status: 200 });
+    if (req.method === "query") {
+      const hash = base58Encode(new Uint8Array(32).fill(blockHashes.length + 1));
+      blockHashes.push(hash);
+      return reply({ result: { nonce: 7, block_hash: hash, permission: "FullAccess" } });
+    }
+    if (req.method === "send_tx" && sends++ === 0) {
+      return reply({ error: { name: "HANDLER_ERROR", cause: { name: "INVALID_TRANSACTION", info: {} }, data: { TxExecutionError: { InvalidTxError: "Expired" } } } });
+    }
+    return reply({ result: { status: { SuccessValue: "" }, transaction: { hash: "x", receiver_id: "sbc.testnet" }, receipts_outcome: [] } });
+  }) as typeof fetch;
+  try {
+    await new NearRpc("http://mock").functionCall(signer, "sbc.testnet", "request_access", { request: {} });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.equal(sends, 2, "one rejected send, one resend");
+  assert.equal(blockHashes.length, 2);
+  assert.notEqual(blockHashes[0], blockHashes[1], "the resend uses a fresh block hash");
 });
 
 test("live testnet MPC signer exposes an Ed25519 domain", { skip: !process.env.SBC_NETWORK_TESTS }, async () => {
