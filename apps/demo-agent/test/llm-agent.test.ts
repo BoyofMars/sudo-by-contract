@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { SudoAgent } from "../../../packages/sbc-agent/src/index.ts";
+import { setNarrationOutput } from "../src/narrate.ts";
 import { GEMINI_MODEL, INJECTION_MARKER, LLM_MODEL, geminiDriver, llmAct, type GeminiApi, type GeminiInteraction, type MessagesApi } from "../src/llm-agent.ts";
 
 type Params = Anthropic.Beta.Messages.MessageCreateParamsNonStreaming;
@@ -56,12 +57,11 @@ function scripted(turns: Anthropic.Beta.BetaMessage[]) {
 }
 
 async function quietly<T>(fn: () => Promise<T>): Promise<T> {
-  const write = process.stdout.write.bind(process.stdout);
-  process.stdout.write = (() => true) as typeof process.stdout.write;
+  setNarrationOutput(() => {});
   try {
     return await fn();
   } finally {
-    process.stdout.write = write;
+    setNarrationOutput((s) => void process.stdout.write(s));
   }
 }
 
@@ -208,5 +208,38 @@ test("gemini driver: a failed interaction ends the act without running anything"
   const r = await quietly(() => llmAct({ ...deps(agent, undefined as unknown as MessagesApi), messages: undefined, driver: geminiDriver(api) }));
   assert.equal(r.stopReason, "error");
   assert.equal(calls.length, 1);
+  assert.deepEqual(log.execs, []);
+});
+
+test("gemini driver: an overloaded model hands over to the fallback and the act carries on", async () => {
+  const { agent } = fakeAgent();
+  const seen: string[] = [];
+  let first = true;
+  const api: GeminiApi = {
+    async create(p) {
+      seen.push(p.model);
+      if (first) {
+        first = false;
+        throw Object.assign(new Error("gemini-3.5-flash-lite is currently experiencing high demand"), { statusCode: 503 });
+      }
+      return { id: "ok", status: "completed", steps: [{ type: "model_output", content: [{ type: "text", text: "Report: done." }] }] };
+    },
+  };
+  const r = await quietly(() => llmAct({ ...deps(agent, undefined as unknown as MessagesApi), messages: undefined, driver: geminiDriver(api) }));
+  assert.deepEqual(seen, ["gemini-3.5-flash-lite", "gemini-3.8-flash"]);
+  assert.equal(r.model, "gemini-3.8-flash");
+  assert.match(r.report, /Report: done/);
+});
+
+test("injection act: a model that cannot be reached ends the act instead of hanging", async () => {
+  const { agent, log } = fakeAgent();
+  const api: GeminiApi = {
+    async create() {
+      throw Object.assign(new Error("quota"), { statusCode: 429 });
+    },
+  };
+  const r = await quietly(() => llmAct({ ...deps(agent, undefined as unknown as MessagesApi), messages: undefined, driver: geminiDriver(api, "gemini-x", []) }));
+  assert.equal(r.stopReason, "error");
+  assert.equal(r.turns, 0);
   assert.deepEqual(log.execs, []);
 });

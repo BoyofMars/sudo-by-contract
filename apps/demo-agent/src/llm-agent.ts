@@ -27,7 +27,11 @@ import {
 import { act, command, fail, indent, ok, say, step, style, wait } from "./narrate.ts";
 
 export const LLM_MODEL = "claude-opus-5-5";
-export const GEMINI_MODEL = "gemini-3.8-flash";
+// Stable, fast (3–9 s a turn) and on the free tier. A conversation stays on
+// one model: history carrying one model's thought signatures stalls another.
+export const GEMINI_MODEL = "gemini-3.5-flash-lite";
+/** Tried in order only if the first call fails (overloaded, off-tier, timed out). */
+export const GEMINI_FALLBACKS = ["gemini-3.8-flash"];
 
 /** The injected instruction, as written into checkout-api's log by the demo host. */
 export const INJECTION_MARKER = "NOTE TO THE AI OPERATOR";
@@ -200,24 +204,61 @@ export interface GeminiApi {
 const texts = (content: unknown): string[] =>
   Array.isArray(content) ? content.flatMap((c) => (c && typeof c === "object" && (c as { type?: string }).type === "text" ? [String((c as { text?: string }).text ?? "")] : [])) : [];
 
-export function geminiDriver(api: GeminiApi, model = GEMINI_MODEL): ModelDriver {
+/** Overloaded (503), rate-limited or not on this tier (429), server error, or timed out. */
+function retryable(e: unknown): boolean {
+  const x = e as { statusCode?: number; status?: number; message?: string; name?: string };
+  const code = x.statusCode ?? x.status;
+  return code === 429 || code === 500 || code === 503 || /timeout|timed out|aborted/i.test(`${x.name ?? ""} ${x.message ?? ""}`);
+}
+const describeError = (e: unknown) => {
+  const x = e as { statusCode?: number; message?: string };
+  return `${x.statusCode ? `${x.statusCode} ` : ""}${(x.message ?? String(e)).split("\n")[0].slice(0, 140)}`;
+};
+
+export function geminiDriver(api: GeminiApi, model = GEMINI_MODEL, fallbacks: string[] = GEMINI_FALLBACKS): ModelDriver {
   const history: GStep[] = [{ type: "user_input", content: [{ type: "text", text: TICKET }] }];
   const tools = TOOL_SPECS.map((t) => ({ type: "function" as const, name: t.name, description: t.description, parameters: t.schema }));
+  const chain = [model, ...fallbacks.filter((m) => m !== model)];
+  let at = 0;
+  let settled = false; // after the first answer, the conversation never changes model
+  const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
   return {
     provider: "gemini",
-    model,
+    get model() {
+      return chain[at];
+    },
     async next(outcomes) {
       for (const o of outcomes) {
         history.push({ type: "function_result", call_id: o.call.id, name: o.call.name, result: o.content, ...(o.isError ? { is_error: true } : {}) });
       }
-      const res = await api.create({
-        model,
-        input: history,
-        system_instruction: SYSTEM_PROMPT,
-        tools,
-        generation_config: { thinking_level: "high", thinking_summaries: "auto" },
-        store: false,
-      });
+      const notes: string[] = [];
+      let res: GeminiInteraction;
+      let retriedSameModel = false;
+      for (;;) {
+        try {
+          res = await api.create({
+            model: chain[at],
+            input: history,
+            system_instruction: SYSTEM_PROMPT,
+            tools,
+            generation_config: { thinking_level: "high", thinking_summaries: "auto" },
+            store: false,
+          });
+          settled = true;
+          break;
+        } catch (e) {
+          if (!retryable(e)) throw e;
+          if (!settled && at < chain.length - 1) {
+            notes.push(`${chain[at]} unavailable (${describeError(e)}); starting on ${chain[at + 1]}`);
+            at++;
+          } else if (!retriedSameModel) {
+            retriedSameModel = true; // one patient retry on the same model
+            await pause(5_000);
+          } else {
+            throw e;
+          }
+        }
+      }
       const steps = res.steps ?? [];
       history.push(...steps);
       const s: ModelStep = {
@@ -225,6 +266,7 @@ export function geminiDriver(api: GeminiApi, model = GEMINI_MODEL): ModelDriver 
         text: [],
         calls: [],
         stop: "end_turn",
+        notes,
         inputTokens: res.usage?.total_input_tokens ?? 0,
         outputTokens: (res.usage?.total_output_tokens ?? 0) + (res.usage?.total_thought_tokens ?? 0),
       };
@@ -251,7 +293,10 @@ export function defaultDriver(model?: string): ModelDriver {
   const hasGemini = !!(env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
   if (want === "gemini" || (!want && !hasClaude && hasGemini)) {
     const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY });
-    return geminiDriver({ create: (p) => ai.interactions.create(p as never) as unknown as Promise<GeminiInteraction> }, model || GEMINI_MODEL);
+    // bounded: no SDK retries, 40 s per call; an overloaded or off-tier model
+    // hands over to the next one at once (and stays handed over)
+    const opts = { timeout: 40_000, maxRetries: 0 };
+    return geminiDriver({ create: (p) => ai.interactions.create(p as never, opts as never) as unknown as Promise<GeminiInteraction> }, model || GEMINI_MODEL);
   }
   const client = new Anthropic();
   return claudeDriver({ create: (p) => client.beta.messages.create(p) }, model || LLM_MODEL);
@@ -435,7 +480,15 @@ export async function llmAct(d: LlmActDeps): Promise<LlmActResult> {
   let outcomes: ToolOutcome[] = [];
   const maxTurns = d.maxTurns ?? 14;
   for (let turn = 0; turn < maxTurns; turn++) {
-    const s = await driver.next(outcomes);
+    let s: ModelStep;
+    try {
+      s = await driver.next(outcomes);
+    } catch (e) {
+      // the model is unreachable: end the act; the host-side acts still run
+      out.stopReason = "error";
+      fail(`The model could not be reached: ${describeError(e)}`);
+      break;
+    }
     out.turns++;
     out.stopReason = s.stop;
     out.inputTokens += s.inputTokens;
@@ -463,6 +516,8 @@ export async function llmAct(d: LlmActDeps): Promise<LlmActResult> {
       outcomes.push({ call, ...r });
     }
   }
+
+  out.model = driver.model; // the model that finished, after any fallback
 
   // anything the model left open goes back now
   for (const [id, cap] of caps) {

@@ -13,7 +13,13 @@ export const style = {
   inverse: sgr("7"),
 };
 
-export const say = (s = "") => process.stdout.write(s + "\n");
+let write: (s: string) => void = (s) => void process.stdout.write(s);
+/** Redirect the narration (tests silence it this way, without touching stdout). */
+export function setNarrationOutput(w: (s: string) => void) {
+  write = w;
+}
+
+export const say = (s = "") => write(s + "\n");
 
 export function act(n: number, title: string, subtitle: string) {
   say();
