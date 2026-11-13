@@ -32,7 +32,8 @@ back from the contract.
 
 `--scenario injection` (also a live-hero option) replaces the scripted agent with a real
 model (`apps/demo-agent/src/llm-agent.ts`): Gemini through Google's SDK (Interactions API,
-`gemini-3.8-flash` by default) when `GEMINI_API_KEY` is set, or Claude Opus 5.5 through the
+`gemini-3.5-flash-lite` by default, `gemini-3.8-flash` as a fallback before the first answer)
+when `GEMINI_API_KEY` is set, or Claude Opus 5.5 through the
 Anthropic SDK when `ANTHROPIC_API_KEY` is; `SBC_LLM_MODEL` picks another model. The model gets the
 incident ticket and four tools: `check_health`, `request_capability`, `run_command` and
 `release_capability`. It holds no credential, so every server action goes through the same

@@ -18,3 +18,5 @@ sandbox/state/
 !apps/console/.env.production
 # Vercel local link/build output
 .vercel/
+# demo film source and renders (kept local; screenshots used by the README live in docs/media)
+video/
