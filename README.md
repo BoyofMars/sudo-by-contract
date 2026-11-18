@@ -4,9 +4,10 @@
 
 ### Give AI agents permission, not credentials.
 
-One action. One server. A few minutes.<br>
+One action. One server. A few minutes. Paid per session.<br>
 Approved by a contract on NEAR. Signed by NEAR's MPC network.<br>
-**No SSH certificate authority key exists. Anywhere.**
+**No SSH certificate authority key exists. Anywhere.**<br>
+The contract is locked and reproducibly built: nobody, us included, can change its rules.
 
 [![live on NEAR testnet](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/live-hero.yml/badge.svg)](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/live-hero.yml)
 [![ci](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/ci.yml)
@@ -51,8 +52,11 @@ Real OpenSSH accepts it, the restart runs, and that's all it can ever do:
 | `sudo systemctl restart sshd` | ❌ denied: out of scope |
 | `sudo systemctl restart checkout-api` (again) | ❌ denied: the single use is spent |
 | anything, 10 minutes later | ❌ **refused by sshd itself**: the certificate has expired |
+| the same certificate, after the capability is revoked | ❌ **refused by sshd itself**: its serial is in the revocation list |
 
 Every allowed and denied command is an event on NEAR. Nothing here is decided by a UI.
+And every capability can carry a price: the agent pays per session, from a prepaid balance,
+to the server owner's account, and only when the certificate is actually issued.
 
 ## It's live. Not a mock.
 
@@ -84,6 +88,34 @@ I'm treating this like inert text."*) and didn't act on it.
 agent. Every one is denied, and every denial is on-chain:
 
 ![The live audit log: the injected commands denied as on-chain events #157 to #159](docs/media/audit-injection-denied.png)
+
+### Revoked means refused by OpenSSH itself
+
+In [run 44361287870](https://github.com/BoyofMars/sudo-by-contract/actions/runs/44361287870)
+(18 November 2026) the agent gets a 5-minute capability (request #31, certificate serial 32),
+uses it once and hands it back early:
+
+1. the contract puts serial 32 on its revocation list for `prod-web-02`;
+2. the gate denies the very next command: `DENIED (released) capability #31`;
+3. 30 seconds later the host has synced the list into sshd's KRL, and **sshd refuses the
+   certificate at login with 4:13 still left on it**, so the refusal can only be the revocation.
+   sshd's own log line, printed in the run:
+
+```
+Authentication key ED25519-CERT SHA256:QPOxBDUNOCO32xGhs6U5CvLBecIDHkIR3TQmE6lkE70 revoked by file /etc/sbc/ssh/sbc_revoked.krl
+```
+
+This act runs in every scheduled `live-hero` run, so the proof repeats every 8 hours.
+
+### Paid per session
+
+`prod-web-02` is priced at **0.01 NEAR per capability, paid to `bagyard.testnet`** (the server
+owner), at most 20 a day per agent. The first paid capability on testnet was request #32: its
+on-chain events read `payment_held` (0.0100 NEAR held from the agent's balance) → approved by
+policy → MPC signing → `credential_issued` (serial 33) → `payment_settled` (paid to
+`bagyard.testnet`). The agent's balance went from 2.0000 to 1.9900 NEAR. Read it yourself:
+`get_purse {"agent_id":"deploy-agent"}` and `get_price {"resource_id":"prod-web-02"}` on
+`bagyard-sexton.testnet`.
 
 ## How it works
 
@@ -140,18 +172,70 @@ sequenceDiagram
 * **The audit trail lives on a public ledger.** A customer, an auditor or a regulator can check
   what was allowed and what happened without trusting the operator's database.
 
+## Pay per session
+
+The certificate is the capability, so it can carry a price. Money, intelligence and ownership
+meet in one object: an agent pays for exactly the authority it is issued, and the server owner
+is paid for exactly what was used.
+
+An agent signs with a function-call key, and NEAR does not let such a key attach a deposit,
+so payment is a prepaid escrow the contract keeps ([`contracts/sbc-policy/src/billing.rs`](contracts/sbc-policy/src/billing.rs)):
+
+| Step | On-chain |
+|---|---|
+| The operator prices a server | `set_price(resource_id, price, payee, daily_quota)` (admins only) |
+| Anyone funds an agent | `fund_agent(agent_id)` from an ordinary wallet; the first funder is the only account that can `withdraw_agent_funds` |
+| The agent asks | `request_access` **holds** the price and counts the daily quota; an unfunded or over-quota request is rejected before anyone is asked |
+| The certificate is issued | the MPC callback **pays** the hold to the payee in the same receipt (`payment_settled`) |
+| No certificate | denied, lapsed, cancelled, revoked or failed signing **returns** the hold (`payment_released`) |
+
+Balances live under their own storage keys, outside the contract's state struct, so billing
+was added to the live contract without a migration. 9 contract tests cover the hold, the
+settlement, rejection, release, the quota and the wallet.
+
+## Locked, and reproducible
+
+* **Locked.** `bagyard-sexton.testnet` holds **zero full-access keys**: only the five
+  function-call role keys. No one can redeploy it, change what it signs, move its funds or add
+  keys outside its own code. The owner account can still tune configuration and manage
+  identities through the contract's own methods; the rules themselves can't change.
+* **Reproducible (NEP-330).** The deployed code hash is
+  `3n7zWw87d9LaJGesbn4GvPfZ949LqUtt2rD2PNNepqbE`, built in the pinned image
+  `sourcescan/cargo-near:0.23.0-rust-1.99.1` from commit
+  [`10692e0`](https://github.com/BoyofMars/sudo-by-contract/tree/10692e01788bfdc89e7e0ccecce409f2e37a6fbe).
+  The contract reports both through `contract_source_metadata`. Rebuild it and compare:
+
+  ```bash
+  git checkout 10692e0 && cargo near build reproducible-wasm --manifest-path contracts/sbc-policy/Cargo.toml
+  ```
+
+  CI's `reproducible-contract` job does the same on every push and prints the hash.
+
+## Why not NEAR's Agent API?
+
+The Agent API (agentsonintents.com) is the right tool for what an agent may do with **money**:
+spending limits and policy-bound wallets. Sudo by Contract governs what an agent may do on a
+**server**, which the Agent API cannot reach:
+
+* it builds **OpenSSH certificate bodies** and has them signed by NEAR Chain Signatures
+  ([`begin_signing`](contracts/sbc-policy/src/lib.rs), `sign` with `payload_v2.Eddsa`), so the
+  contract *is* the SSH certificate authority;
+* it is enforced **on the host**, by sshd (CA, principal, validity, KRL, `ForceCommand`) and
+  [`sbc-gate`](crates/sbc-gate) (closed command grammar, `consume()` before every command);
+* revocation reaches **sshd itself** through the KRL the gate syncs from `list_revocations`.
+
 ## Verify it yourself
 
 | Do | See |
 |---|---|
-| Open [**/#/proof**](https://sudo-by-contract.vercel.app/#/proof) | Your browser asks NEAR directly: the CA key the MPC network derives for the contract, that another account gets a different key, and a real issued certificate's Ed25519 signature. **7 of 7 checks in ~2 s**, no account, no server of ours. |
+| Open [**/#/proof**](https://sudo-by-contract.vercel.app/#/proof) | Your browser asks NEAR directly: the CA key the MPC network derives for the contract, that another account gets a different key, and a real issued certificate's Ed25519 signature; that the contract holds no full-access key (locked); and that it reports a reproducible build of a named commit (NEP-330). **9 checks in a few seconds**, no account, no server of ours. |
 | Open [**Try to escape**](https://sudo-by-contract.vercel.app/#/escape) | You are the agent, with one capability. Try `sudo cat /etc/shadow`, `sudo -i`, `…; id`, `restart sshd`. The parser and the executed argv are the gate's real Rust code compiled to WebAssembly. `0 escaped`. |
 | Open the [**console**](https://sudo-by-contract.vercel.app/#/console) | Every capability, approval, certificate and denial, read live from the contract. **Try simulation** opens a labelled sandbox where you can approve, deny and revoke. |
 | Open the latest [**live-hero run**](https://github.com/BoyofMars/sudo-by-contract/actions/workflows/live-hero.yml) | Every 8 hours, unattended: a real host on a GitHub runner, a real agent, the deployed contract and MPC signer. After the window closes, **sshd itself** refuses the certificate. The job summary reads it all back from the chain. |
 | `npm ci && npm run judge` | Everything that runs from a clone, in one command: the Rust and TypeScript suites and the live testnet check, each claim printed next to its evidence. `--offline` skips the network. Needs Node ≥ 23.6 (`.nvmrc`) and Rust (`rust-toolchain.toml`). |
 | `npm ci && npm run verify:live` | The proof page's seven checks from a terminal, plus OpenSSH's own `ssh-keygen -L` accepting the MPC-signed certificate. |
 
-![The public proof page: 7 of 7 checks verified live from the browser](docs/media/proof-page.png)
+![The public proof page, verified live from the browser](docs/media/proof-page.png)
 
 ### What is tested, and how
 
@@ -159,13 +243,15 @@ sequenceDiagram
 |---|---|
 | NEAR's MPC network can act as an OpenSSH CA | The MPC contract's `sign` with `payload_v2.Eddsa` (≤ 1232 bytes) and standard Ed25519 verification against the derived key; the live testnet signer reports domain 1 = FROST Ed25519, threshold 11. |
 | Our certificates are real OpenSSH certificates | `ssh-keygen -L` accepts certificates built by `sbc-core` (the code the contract runs); one flipped bit is rejected with `incorrect signature`; re-encoding an `ssh-keygen -s` certificate reproduces its signed bytes exactly (`crates/sbc-core/examples/interop.rs`). |
-| Policy, approvals, signing, `consume`, expiry, revocation, host binding, admin quorum, identity removal | 32 contract tests with a simulated MPC callback carrying real Ed25519 signatures (`contracts/sbc-policy/src/tests.rs`). |
+| Policy, approvals, signing, `consume`, expiry, revocation, host binding, admin quorum, identity removal, pay per session | 41 contract tests with a simulated MPC callback carrying real Ed25519 signatures (`contracts/sbc-policy/src/tests.rs`). |
+| It runs on a real NEAR runtime | 3 **sandbox tests** (`near-workspaces`, a local NEAR node) with a test-only mock of the MPC signer: request → approve → cross-contract `sign` → certificate verified against the derived CA → `consume` allowed once, then exhausted and out-of-scope → revoke and release land on the revocation list; and every role key is refused by the NEAR runtime itself (`MethodNameMismatch`) outside its method list (`contracts/sbc-policy/tests/sandbox.rs`). |
 | The gate enforces it | 10 unit and 11 integration tests against mock NEAR RPCs that verify every transaction signature: the hero sequence, independent certificate checks, host ceiling, serial 0, fail-closed, re-provisioning from an enrolled key, and resending only transactions that were never executed (`crates/sbc-gate/tests/`). |
 | Revocation reaches sshd | A KRL built from revoked serials makes `ssh-keygen -Q` report `REVOKED`. |
 | No wallet needed | Hand-written borsh transactions match `@near-js/transactions` byte for byte; WebCrypto Ed25519 signing in the browser and Node. |
 | Real sshd | **14 of 14** in CI on Linux (`sandbox/ci/sshd-integration.sh`): the approved restart runs; `cat /etc/shadow`, out-of-scope, second-use and injected commands are denied; shells, PTYs and port forwarding are refused; sshd itself rejects expired, wrong-host, revoked and certificate-less logins. |
 | Live testnet, end to end | **22 of 22** with `scripts/e2e-testnet.ts`, then the scheduled live-hero runs. The first live run caught two bugs the offline tests missed; both are fixed ([docs/LIVE_RUN.md](docs/LIVE_RUN.md)). |
-| All of it | **74 Rust tests** (`cargo test --workspace`) and **43 TypeScript tests** (`npm test`); `tsc` clean. |
+| Revocation reaches sshd, live | Every scheduled live-hero run revokes a capability early and records sshd refusing the still-valid certificate (`revoked by file …sbc_revoked.krl`). |
+| All of it | **87 Rust tests** (`cargo test --workspace`), **3 sandbox tests** on a NEAR node (`cargo test -p sbc-policy --test sandbox -- --ignored`, in CI) and **44 TypeScript tests** (`npm test`); `tsc` clean. |
 
 ## Where this goes
 
@@ -177,8 +263,12 @@ agent needs power for a moment, not forever, the same loop fits.
 * SSH with typed actions: `service.restart`, `service.status`, `logs.read`
 * SDK, CLI and MCP server for agents; phone approvals with device keys (no wallet)
 * k-of-n admin quorum, revocation down to sshd's KRL, a public proof page, live CI on testnet
+* Pay per session: priced servers, prepaid agent balances, payment to the server owner on issue
+* A locked, reproducibly built contract (NEP-330), and sandbox tests on a real NEAR runtime
 
 **Next**
+* **USDC and NEAR Intents:** fund agents in USDC (NEP-141 `ft_transfer_call`) and settle
+  across chains through NEAR Intents on mainnet, so a vendor can pay in whatever it holds.
 * **Kubernetes:** `k8s.rollout_restart:<namespace>/<deployment>` through an admission webhook
   or exec proxy that calls `consume` before anything changes.
 * **Databases:** one migration or one query class, for one window, on one database.
@@ -190,7 +280,8 @@ agent needs power for a moment, not forever, the same loop fits.
   the contract from signed attestations.
 
 **Later**
-* **Mainnet**, with the contract account locked and upgrades behind a multisig and timelock.
+* **Mainnet**, locked like the testnet contract, with new versions shipped as new, reproducibly
+  built contract accounts that hosts opt into.
 * **Cross-organisation agents:** enroll a vendor's SRE agent under *your* policy, with no
   identity federation and no trust in their CA. Both sides can verify what happened.
 * **Private targets:** service names committed by hash, so infrastructure topology never
@@ -204,8 +295,12 @@ others do well and where trust sits in each.
 
 ## Honest limits
 
-* **Contract upgradeability.** Whoever can deploy code to the contract account controls the CA.
-  Production must lock the account or govern upgrades with a multisig and timelock.
+* **A lock is forever.** The testnet contract has no full-access key, so nobody can change its
+  rules, and nobody can fix them either: a new version means a new contract account (and a new
+  CA key that hosts must trust). If NEAR's testnet MPC signer ever changes its interface, this
+  deployment stops issuing certificates and fails closed.
+* **Payment is testnet NEAR today.** USDC (NEP-141) and settlement through NEAR Intents are on the
+  roadmap; Intents has no testnet.
 * **Latency.** Each privileged command costs one NEAR transaction (~1–2 s): the right trade for
   rare, dangerous actions, not for chatty reads.
 * **Availability.** If NEAR or the MPC network is unavailable, nothing new is issued and the gate
@@ -243,6 +338,7 @@ others do well and where trust sits in each.
 
 * Built at **NEAR HACKATHON** (November 2026) for the **AI Security & Defense** and **Open Innovation** tracks.
 * **Demo post:** [the 2-minute video and thread on X](https://x.com/TheBoyOfMars/status/2121227594725011555).
+* **The judged submission is tag [`hackathon-submission`](https://github.com/BoyofMars/sudo-by-contract/tree/hackathon-submission)** (development ended 2026-11-14 23:59 UTC). Everything below was added after the deadline, on branch `v2`: pay per session, the locked and reproducibly built contract, sandbox tests, the live revocation act and the two new proof checks ([compare](https://github.com/BoyofMars/sudo-by-contract/compare/hackathon-submission...v2)).
 * **All code in this repository was written during the hackathon** (first commit 2026-11-10). No pre-existing code, starter template or boilerplate.
 * **Built with:** Rust: `near-sdk` 5.30 (contract); `ed25519-dalek`, `sha2`, `base64`, `bs58`, `hex`, `serde`/`serde_json`, `toml`, `ureq` (gate). TypeScript on Node 26: borsh, NEAR transactions and OpenSSH encoding are hand-written (`@near-js/crypto` and `@near-js/transactions` are dev-only, to check our bytes match); the only runtime npm dependencies are the model SDKs for the demo agent's model act, `@google/genai` (Gemini) and `@anthropic-ai/sdk` (Claude). Console: React 19, Vite 8, Inter and JetBrains Mono via Fontsource. Tooling: `cargo-near`, `near-cli-rs`, OpenSSH, Docker, GitHub Actions, Vercel.
 * **NEAR integration:** the policy contract runs on NEAR testnet; **NEAR Chain Signatures** (MPC, Ed25519 domain) is the SSH certificate authority, with the CA key derived for the contract's account; **function-call access keys** on the contract account are the identity layer for admins, approvers, agents and hosts; every authorisation event is a NEP-297 event in a hash-chained, on-chain audit log.
