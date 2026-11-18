@@ -22,6 +22,7 @@ import { tmpdir } from "node:os";
 import {
   actionTitle,
   formatCountdown,
+  formatNear,
   NearRpc,
   parseCertificateLine,
   SudoContract,
@@ -152,6 +153,22 @@ function describeCertificate(r: AccessRequest) {
   say(`    ${style.dim("force-cmd   ")} ${cert.criticalOptions["force-command"] ?? "—"}  ${style.dim("(every session goes through the gate)")}`);
   say(`    ${style.dim("extensions  ")} ${cert.extensions.length ? cert.extensions.join(", ") : "none — no PTY, no forwarding, no agent"}`);
   say(`    ${style.dim("uses        ")} ${r.max_uses}`);
+  const paid = r.events.find((e) => e.kind === "payment_settled");
+  if (paid) say(`    ${style.dim("paid        ")} ${paid.detail}  ${style.dim("(settled on-chain when the certificate was issued)")}`);
+}
+
+/** Pay per session: show the price of this resource and the agent's prepaid balance, if it is priced. */
+async function showBilling(agentId: string): Promise<void> {
+  const chain = new SudoContract(env.SBC_CONTRACT ?? "", new NearRpc(env.SBC_RPC));
+  try {
+    const price = await chain.price(RESOURCE);
+    if (!price || BigInt(price.price) === 0n) return;
+    const purse = await chain.purse(agentId);
+    step("billing", `${formatNear(price.price)} per capability on ${RESOURCE}, paid to ${price.payee} when a certificate is issued${price.daily_quota ? ` · quota ${price.daily_quota}/day` : ""}`);
+    say(`    ${style.dim(`prepaid balance ${formatNear(purse.available)} · spent so far ${formatNear(purse.spent)}${purse.wallet ? ` · wallet ${purse.wallet}` : ""}`)}`);
+  } catch (e) {
+    say(`    ${style.dim(`billing unavailable: ${e instanceof Error ? e.message : e}`)}`);
+  }
 }
 
 async function restartAct(agent: SudoAgent): Promise<void> {
@@ -315,6 +332,7 @@ async function main() {
   try {
     const me = await agent.agentId();
     step("identity", `${me} (key ${(await agent.publicKey()).slice(0, 24)}…, an access key that can only call request_access / cancel_request)`);
+    await showBilling(me);
   } catch (e) {
     fail(`agent identity: ${e instanceof Error ? e.message : e}`);
     process.exit(1);

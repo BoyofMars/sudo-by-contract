@@ -186,6 +186,25 @@ export interface Revocation {
   valid_before: number;
 }
 
+/** Pay per session: a resource's price per issued capability. Amounts are yoctoNEAR strings. */
+export interface Pricing {
+  resource_id: string;
+  price: string;
+  /** The server owner's account, paid when a certificate is issued. */
+  payee: string;
+  /** Paid capabilities per agent per UTC day on this resource (0 = no limit). */
+  daily_quota: number;
+}
+
+export interface Purse {
+  agent_id: string;
+  available: string;
+  held: string;
+  spent: string;
+  wallet: string | null;
+  holds: { request_id: number; amount: string; payee: string }[];
+}
+
 export interface Config {
   owner: string;
   mpc_contract: string;

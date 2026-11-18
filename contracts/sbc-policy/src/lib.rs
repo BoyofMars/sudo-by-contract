@@ -16,6 +16,7 @@
 //!   gate before it runs, which is what makes single-use, revocation and
 //!   scope enforcement real.
 
+pub mod billing;
 pub mod policy;
 pub mod types;
 
@@ -303,6 +304,9 @@ impl SudoByContract {
             };
             self.event(r, kind, "clock", "validity window elapsed".into());
             self.drop_live(&r.agent_id.clone(), r.id);
+            if eff == RequestState::ApprovalExpired {
+                self.release_payment(r);
+            }
         }
     }
 
@@ -903,12 +907,34 @@ impl SudoByContract {
             (None, None) => unreachable!(),
         }
 
+        // --- pay per session: hold the resource's price from the agent's prepaid balance
+        let mut held: Option<(u128, String)> = None;
+        if r.state != RequestState::Rejected {
+            match self.hold_payment(&r) {
+                Ok(None) => {}
+                Ok(Some((amount, payee, check))) => {
+                    r.checks.push(check);
+                    held = Some((amount, payee));
+                }
+                Err(reason) => {
+                    r.checks.push(Check { name: "payment".into(), ok: false, detail: reason.clone() });
+                    r.state = RequestState::Rejected;
+                    r.state_reason = Some(format!("payment: {}", reason));
+                    start_signing = false;
+                }
+            }
+        }
+
         let detail = match r.state {
             RequestState::Rejected => r.state_reason.clone().unwrap_or_default(),
             RequestState::PendingApproval => format!("policy {} requires {} approval(s)", r.policy_id.clone().unwrap_or_default(), r.required_approvals),
             _ => format!("auto-approved by policy {}", r.policy_id.clone().unwrap_or_default()),
         };
         self.event(&mut r, "policy_evaluated", "policy", detail);
+        if let Some((amount, payee)) = held {
+            let d = format!("{} held from the agent's balance; paid to {} when the certificate is issued", billing::near_str(amount), payee);
+            self.event(&mut r, "payment_held", "billing", d);
+        }
 
         if r.state == RequestState::Rejected {
             self.bump_stats(&agent.id, |s| s.rejected += 1);
@@ -984,6 +1010,7 @@ impl SudoByContract {
         self.event(&mut r, "approval_denied", &approver, reason);
         self.drop_live(&agent_id, request_id);
         self.bump_stats(&agent_id, |s| s.denied += 1);
+        self.release_payment(&mut r);
         self.save(r);
     }
 
@@ -1012,6 +1039,8 @@ impl SudoByContract {
         self.event(r, "authorization_revoked", who, reason);
         self.drop_live(&agent_id, r.id);
         self.bump_stats(&agent_id, |s| s.revoked += 1);
+        // a certificate already issued was paid for; anything earlier is released
+        self.release_payment(r);
     }
 
     /// The agent releases its own capability as soon as the task is done.
@@ -1030,7 +1059,159 @@ impl SudoByContract {
         let agent_id = r.agent_id.clone();
         self.event(&mut r, "authorization_released", &agent_id, "agent released the capability".into());
         self.drop_live(&agent_id, request_id);
+        self.release_payment(&mut r);
         self.save(r);
+    }
+
+    // ============================================================ billing
+
+    /// The operator prices a resource: `price` yoctoNEAR per issued capability,
+    /// paid to `payee` (the server owner's account), at most `daily_quota`
+    /// paid capabilities per agent per UTC day (0 or null = no limit).
+    /// A price of 0 makes the resource free again.
+    pub fn set_price(&mut self, resource_id: String, price: U128, payee: Option<AccountId>, daily_quota: Option<u32>) {
+        let actor = self.require_admin();
+        require!(self.resources.get(&resource_id).is_some(), "unknown resource");
+        if price.0 == 0 {
+            billing::set_pricing(&resource_id, None);
+            self.audit("price_set", &actor, json!({ "resource_id": resource_id, "price": "0", "detail": "free" }));
+            return;
+        }
+        let payee = payee.unwrap_or_else(|| env::panic_str("a priced resource needs a payee account"));
+        require!(payee != env::current_account_id(), "the payee must be the server owner's account, not this contract");
+        let p = billing::Pricing { price: price.0, payee: payee.to_string(), daily_quota: daily_quota.unwrap_or(0) };
+        billing::set_pricing(&resource_id, Some(&p));
+        let detail = format!("{} per capability, paid to {}", billing::near_str(p.price), p.payee);
+        self.audit("price_set", &actor, json!({ "resource_id": resource_id, "price": price, "payee": p.payee, "daily_quota": p.daily_quota, "detail": detail }));
+    }
+
+    pub fn get_price(&self, resource_id: String) -> Option<billing::PricingView> {
+        billing::pricing(&resource_id).map(|p| billing::PricingView { resource_id, price: U128(p.price), payee: p.payee, daily_quota: p.daily_quota })
+    }
+
+    /// Top up an agent's prepaid balance from an ordinary account. The first
+    /// account to fund an agent becomes its wallet: the only account that can
+    /// withdraw what is left. (The agent's own key cannot attach deposits.)
+    #[payable]
+    pub fn fund_agent(&mut self, agent_id: String) -> U128 {
+        require!(self.agents.get(&agent_id).is_some(), "unknown agent");
+        let amount = env::attached_deposit().as_yoctonear();
+        require!(amount >= billing::MIN_FUNDING, "attach at least 0.01 NEAR");
+        let funder = env::predecessor_account_id();
+        require!(funder != env::current_account_id(), "fund agents from an ordinary account");
+        let mut p = billing::purse(&agent_id);
+        p.available += amount;
+        if p.wallet.is_none() {
+            p.wallet = Some(funder.to_string());
+        }
+        billing::save_purse(&agent_id, &p);
+        let detail = format!("{} added; {} available", billing::near_str(amount), billing::near_str(p.available));
+        self.audit("agent_funded", funder.as_str(), json!({ "agent_id": agent_id, "amount": U128(amount), "detail": detail }));
+        U128(p.available)
+    }
+
+    /// The agent's wallet takes back unspent funds (all of them by default).
+    pub fn withdraw_agent_funds(&mut self, agent_id: String, amount: Option<U128>) -> Promise {
+        self.sweep_payments(&agent_id);
+        let mut p = billing::purse(&agent_id);
+        let wallet = p.wallet.clone().unwrap_or_else(|| env::panic_str("this agent has no wallet"));
+        require!(env::predecessor_account_id().as_str() == wallet, "only the agent's wallet can withdraw");
+        let amount = amount.map(|a| a.0).unwrap_or(p.available);
+        require!(amount > 0 && amount <= p.available, "nothing to withdraw, or more than is available");
+        p.available -= amount;
+        billing::save_purse(&agent_id, &p);
+        let detail = format!("{} returned to {}", billing::near_str(amount), wallet);
+        self.audit("agent_withdrawn", &wallet, json!({ "agent_id": agent_id, "amount": U128(amount), "detail": detail }));
+        Promise::new(wallet.parse().unwrap()).transfer(NearToken::from_yoctonear(amount))
+    }
+
+    pub fn get_purse(&self, agent_id: String) -> billing::PurseView {
+        let p = billing::purse(&agent_id);
+        let now = now_ms();
+        let mut available = p.available;
+        let mut held = 0u128;
+        let mut holds = vec![];
+        for h in &p.held {
+            let ended_unissued = self
+                .requests
+                .get(h.request_id as u32)
+                .map(|r| Self::effective_state(r, now).is_terminal() && r.certificate.is_none())
+                .unwrap_or(true);
+            if ended_unissued {
+                available += h.amount;
+            } else {
+                held += h.amount;
+                holds.push(billing::HoldView { request_id: h.request_id, amount: U128(h.amount), payee: h.payee.clone() });
+            }
+        }
+        billing::PurseView { agent_id, available: U128(available), held: U128(held), spent: U128(p.spent), wallet: p.wallet, holds }
+    }
+
+    /// Hold the resource's price for this request. Ok(None) = free resource.
+    fn hold_payment(&mut self, r: &AccessRequest) -> Result<Option<(u128, String, Check)>, String> {
+        let pricing = match billing::pricing(&r.resource_id) {
+            Some(p) if p.price > 0 => p,
+            _ => return Ok(None),
+        };
+        self.sweep_payments(&r.agent_id);
+        let day = billing::utc_day(now_ms());
+        let used = billing::quota_used(&r.resource_id, &r.agent_id, day);
+        if pricing.daily_quota > 0 && used >= pricing.daily_quota {
+            return Err(format!("daily quota reached ({} paid capabilities per day on {})", pricing.daily_quota, r.resource_id));
+        }
+        let mut p = billing::purse(&r.agent_id);
+        if p.available < pricing.price {
+            return Err(format!(
+                "insufficient prepaid balance: {} per capability, {} available (fund_agent)",
+                billing::near_str(pricing.price),
+                billing::near_str(p.available)
+            ));
+        }
+        p.available -= pricing.price;
+        p.held.push(billing::HeldPayment { request_id: r.id, amount: pricing.price, payee: pricing.payee.clone(), resource_id: r.resource_id.clone(), day });
+        billing::save_purse(&r.agent_id, &p);
+        billing::set_quota_used(&r.resource_id, &r.agent_id, day, used + 1);
+        let detail = format!("{} held; paid to {} only if the certificate is issued", billing::near_str(pricing.price), pricing.payee);
+        Ok(Some((pricing.price, pricing.payee, Check { name: "payment".into(), ok: true, detail })))
+    }
+
+    /// The certificate was issued: pay the hold to the resource's payee.
+    fn settle_payment(&mut self, r: &mut AccessRequest) {
+        let mut p = billing::purse(&r.agent_id);
+        let Some(i) = p.held.iter().position(|h| h.request_id == r.id) else { return };
+        let h = p.held.remove(i);
+        p.spent += h.amount;
+        billing::save_purse(&r.agent_id, &p);
+        self.event(r, "payment_settled", "billing", format!("{} paid to {}", billing::near_str(h.amount), h.payee));
+        Promise::new(h.payee.parse().unwrap()).transfer(NearToken::from_yoctonear(h.amount)).detach();
+    }
+
+    /// The request ended without a certificate: return the hold to the agent.
+    fn release_payment(&mut self, r: &mut AccessRequest) {
+        let mut p = billing::purse(&r.agent_id);
+        let Some(i) = p.held.iter().position(|h| h.request_id == r.id) else { return };
+        let h = p.held.remove(i);
+        p.available += h.amount;
+        billing::save_purse(&r.agent_id, &p);
+        let used = billing::quota_used(&h.resource_id, &r.agent_id, h.day);
+        billing::set_quota_used(&h.resource_id, &r.agent_id, h.day, used.saturating_sub(1));
+        self.event(r, "payment_released", "billing", format!("{} returned to the agent's balance (no certificate was issued)", billing::near_str(h.amount)));
+    }
+
+    /// Release holds whose requests ended (lazily, e.g. approval expired) without a certificate.
+    fn sweep_payments(&mut self, agent_id: &str) {
+        let ids: Vec<u64> = billing::purse(agent_id).held.iter().map(|h| h.request_id).collect();
+        for id in ids {
+            if id >= self.requests.len() as u64 {
+                continue;
+            }
+            let mut r = self.load(id);
+            if Self::effective_state(&r, now_ms()).is_terminal() && r.certificate.is_none() {
+                self.settle(&mut r);
+                self.release_payment(&mut r);
+                self.save(r);
+            }
+        }
     }
 
     // ============================================================ signing
@@ -1094,6 +1275,7 @@ impl SudoByContract {
             // revoked or cancelled while signing: discard the signature
             r.pending_tbs = None;
             self.event(&mut r, "credential_discarded", "mpc", "signature arrived after the request was closed".into());
+            self.release_payment(&mut r);
             self.save(r);
             return false;
         }
@@ -1125,6 +1307,7 @@ impl SudoByContract {
             None => {
                 let d = format!("certificate serial {} valid until {}", serial_for(r.id), r.valid_before);
                 self.event(&mut r, "credential_issued", "mpc", d);
+                self.settle_payment(&mut r);
             }
             Some(f) => {
                 r.state = RequestState::Failed;
@@ -1132,6 +1315,7 @@ impl SudoByContract {
                 let agent_id = r.agent_id.clone();
                 self.drop_live(&agent_id, r.id);
                 self.event(&mut r, "credential_failed", "mpc", f);
+                self.release_payment(&mut r);
             }
         }
         self.save(r);

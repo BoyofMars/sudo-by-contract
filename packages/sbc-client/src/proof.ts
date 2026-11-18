@@ -71,6 +71,9 @@ const STEP_WORD: Record<string, string> = {
   authorization_expired: "expired",
   authorization_revoked: "revoked",
   authorization_released: "released",
+  payment_held: "payment held",
+  payment_settled: "paid to the server owner",
+  payment_released: "payment returned",
 };
 
 /** Any account other than the contract; derivation is bound to the caller. */

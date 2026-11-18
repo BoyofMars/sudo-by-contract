@@ -22,8 +22,8 @@ export class SudoContract {
     return this.rpc.view<R>(this.contractId, method, args);
   }
 
-  private async call<R = unknown>(signer: Signer, method: string, args: object, gas = DEFAULT_GAS, waitUntil?: WaitUntil): Promise<R> {
-    const out: TxOutcome = await this.rpc.functionCall(signer, this.contractId, method, args, { gas, waitUntil });
+  private async call<R = unknown>(signer: Signer, method: string, args: object, gas = DEFAULT_GAS, waitUntil?: WaitUntil, deposit?: bigint): Promise<R> {
+    const out: TxOutcome = await this.rpc.functionCall(signer, this.contractId, method, args, { gas, waitUntil, deposit });
     return out.value as R;
   }
 
@@ -51,6 +51,10 @@ export class SudoContract {
     });
   }
   revocations(resourceId: string) { return this.view<T.Revocation[]>("list_revocations", { resource_id: resourceId }); }
+  /** What a capability on this resource costs, and who is paid (null = free). */
+  price(resourceId: string) { return this.view<T.Pricing | null>("get_price", { resource_id: resourceId }); }
+  /** An agent's prepaid balance: spendable, held for pending requests, spent, and its wallet. */
+  purse(agentId: string) { return this.view<T.Purse>("get_purse", { agent_id: agentId }); }
   simulate(a: { agent_id: string; resource_id: string; action: string; duration_secs: number; uses?: number; source_address?: string }) {
     return this.view<T.SimulateResult>("simulate", { uses: null, source_address: null, ...a });
   }
@@ -91,6 +95,20 @@ export class SudoContract {
   /** Returns the applied version once the quorum is met, else 0. */
   confirmPolicy(admin: Signer, proposalId: number) { return this.call<number>(admin, "confirm_policy", { proposal_id: proposalId }); }
   setPolicyStatus(admin: Signer, id: string, status: T.Status) { return this.call(admin, "set_policy_status", { id, status }); }
+  /** Price a resource per issued capability (yoctoNEAR), paid to the server owner's `payee` account. 0 = free. */
+  setPrice(admin: Signer, resourceId: string, priceYocto: bigint, payee: string | null, dailyQuota = 0) {
+    return this.call(admin, "set_price", { resource_id: resourceId, price: priceYocto.toString(), payee, daily_quota: dailyQuota });
+  }
+
+  // --------------------------------------------------------------- wallets
+  /** Top up an agent's prepaid balance. Sign with an ordinary account's full-access key (role keys cannot attach deposits). */
+  fundAgent(wallet: Signer, agentId: string, amountYocto: bigint) {
+    return this.call<string>(wallet, "fund_agent", { agent_id: agentId }, DEFAULT_GAS, undefined, amountYocto);
+  }
+  /** The agent's wallet takes back unspent funds (all of them by default). */
+  withdrawAgentFunds(wallet: Signer, agentId: string, amountYocto?: bigint) {
+    return this.call(wallet, "withdraw_agent_funds", { agent_id: agentId, amount: amountYocto?.toString() ?? null });
+  }
 
   // ------------------------------------------------------------ enrollment
   /** Signed with the one-time enrollment token; binds `newPublicKey` and burns the token. */

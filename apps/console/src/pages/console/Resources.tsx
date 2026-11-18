@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Resource } from "@sbc/client";
+import { formatNear, type Resource } from "@sbc/client";
 import { Icon } from "../../components/Icon.tsx";
 import { Badge, CopyButton, Empty, ErrorNote, Field, FixtureTag, KV, PageHeader, Panel, Skeleton, Truncate, cx } from "../../components/ui.tsx";
 import { RequestLine } from "../../components/domain.tsx";
@@ -127,10 +127,38 @@ export function ResourceDetail({ id }: { id: string }) {
           <p className="small muted mono">{env?.path}</p>
         </Panel>
       </div>
+      <PricePanel resourceId={r.id} />
       <Panel title="Recent requests on this resource" flush>
         {reqs.loading ? <Skeleton lines={3} /> : reqs.data?.length ? <div className="list">{reqs.data.map((x) => <RequestLine key={x.id} r={x} label={label} />)}</div> : <Empty title="No requests yet" />}
       </Panel>
     </div>
+  );
+}
+
+/** Pay per session: what a capability on this host costs, and who is paid. */
+function PricePanel({ resourceId }: { resourceId: string }) {
+  const q = useQuery((s) => (s.price ? s.price(resourceId) : Promise.resolve(null)), [resourceId], { interval: 30_000 });
+  const p = q.data;
+  return (
+    <Panel title="Pay per session">
+      {q.loading ? (
+        <Skeleton lines={1} />
+      ) : p && BigInt(p.price) > 0n ? (
+        <>
+          <p className="small muted">Agents pay for each capability they are issued, from a prepaid balance. The price is held when they ask and paid to the server owner's account only if the MPC-signed certificate is issued; otherwise it is returned.</p>
+          <KV
+            cols={3}
+            items={[
+              ["Price", <span className="mono">{formatNear(p.price)}</span>],
+              ["Paid to", <span className="mono">{p.payee}</span>],
+              ["Daily quota", p.daily_quota ? `${p.daily_quota} per agent` : "no limit"],
+            ]}
+          />
+        </>
+      ) : (
+        <p className="quiet-note">Free: no price is set for this resource.</p>
+      )}
+    </Panel>
   );
 }
 

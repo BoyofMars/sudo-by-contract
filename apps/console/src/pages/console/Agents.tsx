@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Agent } from "@sbc/client";
+import { formatNear, type Agent } from "@sbc/client";
 import { Icon } from "../../components/Icon.tsx";
 import { Badge, Command, Dialog, Empty, ErrorNote, Field, KV, PageHeader, Panel, Skeleton, Truncate } from "../../components/ui.tsx";
 import { RequestLine } from "../../components/domain.tsx";
@@ -183,11 +183,30 @@ export function AgentDetail({ id }: { id: string }) {
           <KV cols={1} items={[["Owner", a.owner || "—"], ["Runtime", a.runtime || "—"], ["Registered", dateTime(a.created_at_ms)]]} />
         </Panel>
       </div>
+      <PursePanel agentId={a.id} />
       {token ? <Panel title="Enrollment token"><EnrollInstructions kind="agent" token={token} contractId={source.contractId} principal={a.id} /></Panel> : null}
       <Panel title="Recent requests" flush>
         {reqs.loading ? <Skeleton lines={3} /> : reqs.data?.length ? <div className="list">{reqs.data.map((r) => <RequestLine key={r.id} r={r} label={label} />)}</div> : <Empty title="No requests yet" />}
       </Panel>
     </div>
+  );
+}
+
+/** Pay per session: the agent's prepaid balance kept by the contract. */
+function PursePanel({ agentId }: { agentId: string }) {
+  const q = useQuery((s) => (s.purse ? s.purse(agentId) : Promise.resolve(null)), [agentId], { interval: 15_000 });
+  const p = q.data;
+  if (q.loading || !p || (!p.wallet && BigInt(p.spent) === 0n)) return null;
+  return (
+    <Panel title="Prepaid balance">
+      <p className="small muted">The agent's key cannot attach payments, so its wallet tops up a balance the contract keeps. Each paid capability is held from it and paid to the server owner when the certificate is issued.</p>
+      <div className="stats-row">
+        <Stat k="Available" v={formatNear(p.available)} />
+        <Stat k="Held" v={formatNear(p.held)} sub={p.holds.length ? `for request ${p.holds.map((h) => `#${h.request_id}`).join(", ")}` : "nothing pending"} />
+        <Stat k="Paid to server owners" v={formatNear(p.spent)} />
+      </div>
+      {p.wallet ? <p className="small muted">Wallet (the only account that can withdraw): <span className="mono">{p.wallet}</span></p> : null}
+    </Panel>
   );
 }
 

@@ -104,6 +104,8 @@ export class LiveSource implements DataSource {
   policies() { return this.c.policies(); }
   policy(id: string, version?: number) { return this.c.policy(id, version); }
   simulate(a: Parameters<SudoContract["simulate"]>[0]) { return this.c.simulate(a); }
+  price(resourceId: string) { return this.c.price(resourceId); }
+  purse(agentId: string) { return this.c.purse(agentId); }
 
   async identity(): Promise<Identity> {
     const s = await this.signer();
