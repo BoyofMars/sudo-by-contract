@@ -6,7 +6,10 @@
 // line it prints about allowed or denied actions comes from what the host
 // actually returned; nothing here simulates enforcement.
 //
-//   node apps/demo-agent/src/main.ts [--scenario full|restart|expiry|injection] [--force]
+//   node apps/demo-agent/src/main.ts [--scenario full|restart|expiry|revoke|injection] [--force]
+//
+// `expiry` (the unattended, scheduled run) also includes the revocation act:
+// a capability released early is refused by sshd itself once the host's KRL syncs.
 //
 // `injection` hands the incident to a real model with capability tools,
 // against a host whose logs carry a prompt injection: Gemini (GEMINI_API_KEY)
@@ -19,7 +22,9 @@ import { tmpdir } from "node:os";
 import {
   actionTitle,
   formatCountdown,
+  NearRpc,
   parseCertificateLine,
+  SudoContract,
   type AccessRequest,
 } from "../../../packages/sbc-client/src/index.ts";
 import { CapabilityError, SudoAgent, type Capability, type ExecResult } from "../../../packages/sbc-agent/src/index.ts";
@@ -248,6 +253,61 @@ async function expiryAct(agent: SudoAgent): Promise<void> {
   say(`    ${style.dim(`on-chain state: ${after.state}`)}`);
 }
 
+/**
+ * Revocation reaches OpenSSH: the capability is released (revoked) early, the
+ * contract lists its serial, the gate denies the next command at once, and
+ * after the host's 30-second sync writes the KRL, sshd itself refuses the
+ * still-unexpired certificate at login.
+ */
+async function revokeAct(agent: SudoAgent, n: number): Promise<void> {
+  act(n, "Revocation that OpenSSH enforces", `${RESOURCE} · read ${SERVICE} status · 5 minutes, given back early`);
+  thought("I'll check the status once, then hand the authority back instead of holding it for five minutes.");
+  const cap = await agent.request({ resource: RESOURCE, action: `service.status:${SERVICE}`, duration: "5m", uses: 3, reason: `Check ${SERVICE} status once, then release the capability early.` });
+  ok(`Request #${cap.id} recorded on-chain`);
+  const r = await waitActive(cap);
+  if (!r) return;
+  describeCertificate(r);
+  const serial = Number(parseCertificateLine(r.certificate!).serial);
+  const validBeforeMs = r.valid_before * 1000;
+  await attempt(cap, `systemctl status ${SERVICE}`, "allowed", "read-only status inside the window");
+
+  step("release", `giving capability #${cap.id} back with ${formatCountdown(validBeforeMs - Date.now())} still on the certificate`);
+  await cap.release();
+  const contract = new SudoContract(env.SBC_CONTRACT ?? "", new NearRpc(env.SBC_RPC));
+  let listed = false;
+  for (let i = 0; i < 15 && !listed; i++) {
+    listed = (await contract.revocations(RESOURCE)).some((x) => Number(x.serial) === serial);
+    if (!listed) await sleep(2000);
+  }
+  if (listed) ok(`Serial ${serial} is on the contract's revocation list for ${RESOURCE}`);
+  else {
+    fail(`serial ${serial} did not appear on the revocation list`);
+    unexpected++;
+    return;
+  }
+
+  await attempt(cap, `systemctl status ${SERVICE}`, "denied", "revoked: the gate asks the contract before every command, and the answer is now no");
+
+  step("wait", `for ${RESOURCE} to sync the revocation list into sshd's KRL (every 30 s)`);
+  let refused: ExecResult | null = null;
+  for (let i = 0; i < 4 && !refused; i++) {
+    await sleep(i === 0 ? 35_000 : 15_000);
+    const res = await cap.exec(`systemctl status ${SERVICE}`, HOST, { timeoutMs: 60_000 }).catch(() => null);
+    if (res && res.exitCode === 255) refused = res;
+    else say(`    ${style.dim(`not synced yet: the connection still reached the gate, which denied it (exit ${res?.exitCode ?? "?"})`)}`);
+  }
+  command(`systemctl status ${SERVICE}`);
+  if (refused && /Permission denied/i.test(refused.stderr)) {
+    fail(`${style.bold("DENIED by sshd")} during authentication (exit 255) — the gate never ran`);
+    indent(refused.stderr.trim());
+    verdict(true, `the certificate is still inside its window (${formatCountdown(validBeforeMs - Date.now())} left): sshd refused it because serial ${serial} is in the KRL`);
+    say(`    ${style.dim("sshd's own log on the host names the revocation file (see \"What prod-web-02 saw\").")}`);
+  } else {
+    fail("sshd did not refuse the revoked certificate within 80 s");
+    unexpected++;
+  }
+}
+
 async function main() {
   say(style.bold("Sudo by Contract — Deploy Agent"));
   say(style.dim(`contract ${env.SBC_CONTRACT ?? "?"} · resource ${RESOURCE} · host ${HOST}`));
@@ -261,6 +321,7 @@ async function main() {
   }
   if (scenario === "full" || scenario === "restart") await restartAct(agent);
   if (scenario === "full" || scenario === "expiry") await expiryAct(agent);
+  if (scenario === "full" || scenario === "expiry" || scenario === "revoke") await revokeAct(agent, scenario === "revoke" ? 1 : 3);
   if (scenario === "injection") {
     if (!hasModelKey()) {
       fail("The injection scenario runs a real model: set GEMINI_API_KEY or ANTHROPIC_API_KEY.");

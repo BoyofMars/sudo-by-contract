@@ -20,10 +20,10 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: "restart = needs a human approval; expiry = auto-approved 60 s status window; full = both; injection = a real model works the incident against a poisoned log"
+        description: "restart = needs a human approval; expiry = a 60 s status window that closes, then a capability revoked early and refused by sshd; revoke = only the revocation act; full = all of it; injection = a real model works the incident against a poisoned log"
         type: choice
         default: full
-        options: [full, restart, expiry, injection]
+        options: [full, restart, expiry, revoke, injection]
       model:
         description: "injection only: model id (empty = gemini-3.5-flash-lite with a Gemini key, claude-opus-5-5 with an Anthropic key)"
         type: string
@@ -117,12 +117,19 @@ jobs:
         run: |
           $COMPOSE exec -T demo-server sh -c 'tail -n 40 /var/log/supervisor/sbc-sync.log; echo "--- checkout-api:"; tail -n 20 /var/log/supervisor/checkout-api.log' || true
           $COMPOSE logs --no-color --tail 120 demo-server || true
+          echo "--- sshd on revoked certificates (its own log line, from the KRL):"
+          $COMPOSE logs --no-color demo-server | grep -i "revoked" || echo "(none in this run)"
           echo "--- relay (redacted gate reports, never in the authorisation path):"
           $COMPOSE logs --no-color --tail 60 relay || true
 
       - name: Summary (read back from the contract)
         if: always()
-        run: node scripts/hero-summary.ts --since "${STARTED_MS:-0}" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          node scripts/hero-summary.ts --since "${STARTED_MS:-0}" | tee -a "$GITHUB_STEP_SUMMARY"
+          line=$($COMPOSE logs --no-color demo-server 2>/dev/null | grep -i "revoked by file" | tail -n 1 | sed 's/^[^|]*| //')
+          if [ -n "$line" ]; then
+            { echo; echo "**sshd refused a revoked certificate** (its own log, prod-web-02):"; echo; echo '```'; echo "$line"; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Tear down
         if: always()
