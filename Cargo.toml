@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/sbc-core", "crates/sbc-gate", "crates/sbc-wasm", "contracts/sbc-policy"]
+members = ["crates/sbc-core", "crates/sbc-gate", "crates/sbc-wasm", "contracts/sbc-policy", "contracts/mock-mpc-signer"]
 
 [workspace.package]
 version = "0.1.0"

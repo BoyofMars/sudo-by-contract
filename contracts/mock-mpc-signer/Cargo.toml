@@ -1,0 +1,19 @@
+[package]
+name = "mock-mpc-signer"
+description = "TEST-ONLY stand-in for NEAR's MPC signer contract, used by the sbc-policy sandbox tests. Never deploy it outside a local sandbox."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.30"
+# Signing happens inside the contract (wasm32): no std, no rand, no precomputed tables.
+ed25519-dalek = { version = "2.2", default-features = false }
+hex = "0.4"
+
+[dev-dependencies]
+near-sdk = { version = "5.30", features = ["unit-testing"] }

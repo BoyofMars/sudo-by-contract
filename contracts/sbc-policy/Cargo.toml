@@ -16,3 +16,7 @@ hex = "0.4"
 [dev-dependencies]
 near-sdk = { version = "5.30", features = ["unit-testing"] }
 ed25519-dalek = { version = "2.2" }
+# tests/sandbox.rs: a local NEAR node. No build-time download (default
+# features off); the sandbox binary is fetched when those tests first run.
+near-workspaces = { version = "0.24", default-features = false, features = ["rustls"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

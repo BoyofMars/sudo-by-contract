@@ -23,6 +23,29 @@ jobs:
           cargo run -q -p sbc-core --example interop -- mint "$d/agent.pub" "$d/cert.pub" 600 1042
           ssh-keygen -L -f "$d/cert.pub"
 
+  sandbox:
+    # The policy contract on a local NEAR node (near-workspaces), next to a
+    # TEST-ONLY mock of the MPC signer: real transactions from real
+    # function-call keys, real cross-contract signing. See
+    # contracts/sbc-policy/tests/sandbox.rs.
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-near
+        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/download/cargo-near-v0.23.0/cargo-near-installer.sh | sh
+      - name: Build both contracts to wasm (cargo-near)
+        run: |
+          (cd contracts/sbc-policy && cargo near build non-reproducible-wasm --no-abi)
+          (cd contracts/mock-mpc-signer && cargo near build non-reproducible-wasm --no-abi)
+          ls -l target/near/sbc_policy/sbc_policy.wasm target/near/mock_mpc_signer/mock_mpc_signer.wasm
+      - name: Sandbox tests (local NEAR node)
+        run: cargo test -p sbc-policy --test sandbox -- --ignored
+
   sshd-integration:
     runs-on: ubuntu-latest
     container: rust:1-bookworm
