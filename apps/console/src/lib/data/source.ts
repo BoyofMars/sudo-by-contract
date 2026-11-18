@@ -11,6 +11,8 @@ import type {
   Policy,
   PolicyInput,
   PolicyProposal,
+  Pricing,
+  Purse,
   RequestState,
   Resource,
   ResourceStatus,
@@ -72,6 +74,10 @@ export interface DataSource {
   policy(id: string, version?: number): Promise<Policy | null>;
   simulate(a: { agent_id: string; resource_id: string; action: string; duration_secs: number; uses?: number; source_address?: string }): Promise<SimulateResult>;
   identity(): Promise<Identity>;
+
+  /** Pay per session (live contract only): a resource's price, an agent's prepaid balance. */
+  price?(resourceId: string): Promise<Pricing | null>;
+  purse?(agentId: string): Promise<Purse>;
 
   /** Test fixtures from the live end-to-end run: hidden from lists unless shown. */
   readonly showFixtures?: boolean;

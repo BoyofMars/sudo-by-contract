@@ -53,6 +53,15 @@ impl World {
         self.as_key_gas(sk, 300);
     }
 
+    /// An ordinary account (a person's wallet), optionally attaching NEAR.
+    fn as_account(&self, account: &str, deposit_yocto: u128) {
+        let mut b = self.ctx();
+        b.predecessor_account_id(acc(account))
+            .signer_account_id(acc(account))
+            .attached_deposit(NearToken::from_yoctonear(deposit_yocto));
+        testing_env!(b.build());
+    }
+
     fn as_key_gas(&self, sk: &SigningKey, tgas: u64) {
         let mut b = self.ctx();
         b.predecessor_account_id(acc(CONTRACT))
@@ -664,4 +673,132 @@ fn stale_tokens_cannot_enroll_into_a_reused_id() {
     w.c.create_approver("oncall".into(), "Someone else".into(), true);
     w.as_key(&key(60));
     w.c.complete_enrollment(pk_of(&key(61)), None);
+}
+
+
+// ================================================================ billing
+
+const PAYEE: &str = "server-owner.testnet";
+const WALLET: &str = "agent-owner.testnet";
+const CENTI: u128 = billing::ONE_NEAR / 100;
+
+fn priced(w: &mut World, quota: u32) {
+    w.as_key(&admin_dev());
+    w.c.set_price("prod-web-02".into(), U128(CENTI), Some(acc(PAYEE)), Some(quota));
+}
+
+fn fund(w: &mut World, amount: u128) {
+    w.as_account(WALLET, amount);
+    w.c.fund_agent("deploy-agent".into());
+}
+
+fn purse(w: &World) -> (u128, u128, u128) {
+    let p = w.c.get_purse("deploy-agent".into());
+    (p.available.0, p.held.0, p.spent.0)
+}
+
+#[test]
+fn a_paid_session_is_held_then_paid_to_the_server_owner_on_issue() {
+    let mut w = world();
+    priced(&mut w, 0);
+    fund(&mut w, billing::ONE_NEAR);
+    let id = request(&mut w, "service.restart:checkout-api", 600);
+    let r = w.c.get_request(id).unwrap();
+    assert_eq!(r.state, RequestState::PendingApproval);
+    assert!(r.checks.iter().any(|c| c.name == "payment" && c.ok), "{:?}", r.checks);
+    assert_eq!(purse(&w), (billing::ONE_NEAR - CENTI, CENTI, 0), "held, not paid");
+
+    w.as_key(&approver_dev());
+    w.c.approve(id, None);
+    assert!(w.mpc_sign(id));
+    let receipts = near_sdk::test_utils::get_created_receipts();
+    assert!(receipts.iter().any(|x| x.receiver_id == acc(PAYEE)), "the issue callback pays the server owner");
+    assert_eq!(purse(&w), (billing::ONE_NEAR - CENTI, 0, CENTI));
+    let kinds: Vec<_> = w.c.get_request(id).unwrap().events.iter().map(|e| e.kind.clone()).collect();
+    assert!(kinds.iter().any(|k| k == "payment_held") && kinds.iter().any(|k| k == "payment_settled"), "{kinds:?}");
+}
+
+#[test]
+fn an_unfunded_agent_is_refused_before_anyone_is_asked() {
+    let mut w = world();
+    priced(&mut w, 0);
+    let id = request(&mut w, "service.restart:checkout-api", 600);
+    let r = w.c.get_request(id).unwrap();
+    assert_eq!(r.state, RequestState::Rejected);
+    assert!(r.state_reason.clone().unwrap().contains("insufficient prepaid balance"), "{:?}", r.state_reason);
+    assert!(r.checks.iter().any(|c| c.name == "payment" && !c.ok));
+}
+
+#[test]
+fn a_hold_comes_back_when_no_certificate_is_issued() {
+    let mut w = world();
+    priced(&mut w, 0);
+    fund(&mut w, billing::ONE_NEAR);
+    let denied = request(&mut w, "service.restart:checkout-api", 600);
+    w.as_key(&approver_dev());
+    w.c.deny(denied, "not now".into());
+    assert_eq!(purse(&w), (billing::ONE_NEAR, 0, 0), "denied: released at once");
+
+    // nobody answers: the approval window lapses without any call touching the request
+    let lapsed = request(&mut w, "service.restart:checkout-api", 600);
+    assert_eq!(purse(&w).1, CENTI);
+    w.advance_secs(16 * 60);
+    assert_eq!(purse(&w), (billing::ONE_NEAR, 0, 0), "the view already counts it as spendable");
+    request(&mut w, "service.restart:checkout-api", 600);
+    let kinds: Vec<_> = w.c.get_request(lapsed).unwrap().events.iter().map(|e| e.kind.clone()).collect();
+    assert!(kinds.iter().any(|k| k == "payment_released"), "the next request sweeps it: {kinds:?}");
+}
+
+#[test]
+fn the_daily_quota_caps_paid_capabilities() {
+    let mut w = world();
+    priced(&mut w, 1);
+    fund(&mut w, billing::ONE_NEAR);
+    let first = request(&mut w, "service.restart:checkout-api", 600);
+    assert_eq!(w.c.get_request(first).unwrap().state, RequestState::PendingApproval);
+    let second_id = request(&mut w, "service.restart:checkout-api", 600);
+    let second = w.c.get_request(second_id).unwrap();
+    assert_eq!(second.state, RequestState::Rejected);
+    assert!(second.state_reason.unwrap().contains("daily quota"));
+    // a released hold gives the quota back
+    w.as_key(&approver_dev());
+    w.c.deny(first, "no".into());
+    let third = request(&mut w, "service.restart:checkout-api", 600);
+    assert_eq!(w.c.get_request(third).unwrap().state, RequestState::PendingApproval);
+}
+
+#[test]
+fn free_resources_need_no_balance() {
+    let mut w = world();
+    let id = request(&mut w, "service.restart:checkout-api", 600);
+    let r = w.c.get_request(id).unwrap();
+    assert_eq!(r.state, RequestState::PendingApproval);
+    assert!(!r.checks.iter().any(|c| c.name == "payment"));
+}
+
+#[test]
+fn the_wallet_withdraws_what_is_left() {
+    let mut w = world();
+    fund(&mut w, billing::ONE_NEAR);
+    assert_eq!(w.c.get_purse("deploy-agent".into()).wallet.as_deref(), Some(WALLET));
+    w.as_account(WALLET, 0);
+    w.c.withdraw_agent_funds("deploy-agent".into(), Some(U128(CENTI * 30))).detach();
+    assert_eq!(purse(&w).0, billing::ONE_NEAR - CENTI * 30);
+}
+
+#[test]
+#[should_panic(expected = "only the agent's wallet can withdraw")]
+fn only_the_wallet_that_funded_an_agent_can_withdraw() {
+    let mut w = world();
+    fund(&mut w, billing::ONE_NEAR);
+    w.as_account("mallory.testnet", 0);
+    w.c.withdraw_agent_funds("deploy-agent".into(), None).detach();
+}
+
+#[test]
+#[should_panic(expected = "this key has role Agent, not Admin")]
+fn only_operators_set_prices() {
+    let mut w = world();
+    w.as_key(&agent_key());
+    w.c.set_price("prod-web-02".into(), U128(CENTI), Some(acc(PAYEE)), None);
 }

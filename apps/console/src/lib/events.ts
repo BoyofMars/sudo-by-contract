@@ -20,6 +20,9 @@ export const EVENT_KINDS = [
   "authorization_expired",
   "authorization_revoked",
   "authorization_released",
+  "payment_held",
+  "payment_settled",
+  "payment_released",
 ] as const;
 
 /** Filter groups for people; the raw kind stays in the expanded detail. */
@@ -29,6 +32,7 @@ export const EVENT_GROUPS: { value: string; label: string; short: string; kinds:
   { value: "certificates", label: "Certificates", short: "certificate", kinds: ["credential_signing", "credential_issued", "credential_failed", "credential_discarded"] },
   { value: "commands", label: "Commands", short: "command", kinds: ["command_allowed", "command_denied", "authorization_used"] },
   { value: "endings", label: "Expiry & revocation", short: "end", kinds: ["authorization_expired", "authorization_revoked", "authorization_released"] },
+  { value: "payments", label: "Payments", short: "payment", kinds: ["payment_held", "payment_settled", "payment_released"] },
   { value: "denials", label: "Denials only", short: "denial", kinds: ["command_denied", "approval_denied", "credential_failed"] },
 ];
 
@@ -56,6 +60,9 @@ export function eventTitle(e: RequestEvent, label: (id: string) => string = (x) 
     case "authorization_expired": return { title: "Authorization expired", tone: "muted" };
     case "authorization_revoked": return { title: `Revoked by ${who}`, tone: "danger" };
     case "authorization_released": return { title: "Released by agent", tone: "muted" };
+    case "payment_held": return { title: "Payment held from the agent's balance", tone: "pending" };
+    case "payment_settled": return { title: "Paid to the server owner", tone: "success" };
+    case "payment_released": return { title: "Payment returned to the agent", tone: "muted" };
     default: return { title: e.kind.replace(/_/g, " "), tone: "neutral" };
   }
 }

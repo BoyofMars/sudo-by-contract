@@ -46,6 +46,34 @@ jobs:
       - name: Sandbox tests (local NEAR node)
         run: cargo test -p sbc-policy --test sandbox -- --ignored
 
+  reproducible-contract:
+    # NEP-330: the policy contract built in the pinned image from contracts/sbc-policy/Cargo.toml.
+    # The deployed code hash on-chain is this build; anyone can rerun it and compare.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-near
+        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
+      - name: Reproducible build (pinned sourcescan/cargo-near image)
+        run: cargo near build reproducible-wasm --manifest-path contracts/sbc-policy/Cargo.toml
+      - name: Code hash (compare with the account's code_hash on NEAR)
+        run: |
+          wasm=$(find target/near -name 'sbc_policy.wasm' | head -n1)
+          echo "wasm: $wasm ($(stat -c %s "$wasm") bytes)"
+          sha256sum "$wasm"
+          node -e '
+            const h = require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest();
+            const A = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"; let n = BigInt("0x" + h.toString("hex")), s = "";
+            while (n > 0n) { s = A[Number(n % 58n)] + s; n /= 58n; } for (const b of h) { if (b) break; s = "1" + s; }
+            console.log("code_hash (base58, as NEAR reports it): " + s);
+            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, "Reproducible build of `sbc-policy`: code_hash **" + s + "**\n");
+          ' "$wasm"
+          cp "$wasm" sbc_policy.wasm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbc-policy-reproducible
+          path: sbc_policy.wasm
+
   sshd-integration:
     runs-on: ubuntu-latest
     container: rust:1-bookworm

@@ -23,6 +23,8 @@ import {
   verify,
   describePolicy,
   formatDuration,
+  formatNear,
+  parseNear,
   NearRpc,
   RpcError,
   retryableTxRejection,
@@ -113,6 +115,13 @@ test("certificate parser reads certificates signed by ssh-keygen", { skip: !have
   assert.deepEqual(c.extensions, []);
   assert.equal(c.validBefore - c.validAfter, 660);
   assert.equal(sshPublicKeyLine(c.caPublicKey), readFileSync(join(dir, "ca.pub"), "utf8").split(" ").slice(0, 2).join(" "));
+});
+
+test("NEAR amounts format and parse exactly", () => {
+  assert.equal(formatNear("10000000000000000000000"), "0.0100 NEAR");
+  assert.equal(formatNear(parseNear("1.5")), "1.5000 NEAR");
+  assert.equal(parseNear("0.01"), 10n ** 22n);
+  assert.throws(() => parseNear("1e3"));
 });
 
 test("policy sentences read like intent", () => {

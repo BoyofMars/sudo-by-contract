@@ -14,7 +14,7 @@ import type { AccessRequest } from "./types.ts";
 export type StepStatus = "pending" | "running" | "pass" | "fail";
 
 export interface ProofStep {
-  id: "contract" | "mpc" | "derivation" | "binding" | "certificate" | "bounds" | "record";
+  id: "contract" | "mpc" | "derivation" | "binding" | "certificate" | "bounds" | "record" | "keys" | "source";
   title: string;
   /** One-sentence claim this step proves, in plain words. */
   claim: string;
@@ -42,6 +42,8 @@ const STEPS: Array<Pick<ProofStep, "id" | "title" | "claim">> = [
   { id: "certificate", title: "A real certificate verifies", claim: "A certificate the contract issued carries a valid Ed25519 signature from that CA." },
   { id: "bounds", title: "The certificate is bounded", claim: "One host, one forced command, no PTY or forwarding, minutes not days." },
   { id: "record", title: "Its history is on-chain", claim: "Request, policy decision, approval, signing and every use are public events." },
+  { id: "keys", title: "Every key is scoped; none can upgrade", claim: "The contract account holds only function-call keys, each limited to a few methods. No full-access key exists to redeploy it." },
+  { id: "source", title: "The code is the published source", claim: "The contract names its repository and commit (NEP-330), built reproducibly: rebuilding that commit gives the code hash on-chain." },
 ];
 
 function short(s: string, n = 10): string {
@@ -71,6 +73,9 @@ const STEP_WORD: Record<string, string> = {
   authorization_expired: "expired",
   authorization_revoked: "revoked",
   authorization_released: "released",
+  payment_held: "payment held",
+  payment_settled: "paid to the server owner",
+  payment_released: "payment returned",
 };
 
 /** Any account other than the contract; derivation is bound to the caller. */
@@ -235,6 +240,32 @@ export async function verifyDeployment(opts: {
     s.facts = [
       ["Policy", `${req.policy_id} v${req.policy_version} · ${short(req.policy_hash ?? "", 8)}`],
       ["Timeline", kinds.map((k) => STEP_WORD[k] ?? k.replace(/_/g, " ")).join(" → ")],
+    ];
+  });
+
+  await step("keys", async (s) => {
+    const r = await rpc.call<any>("query", { request_type: "view_access_key_list", finality: "final", account_id: opts.contractId });
+    const keys: any[] = r.keys ?? [];
+    const full = keys.filter((k) => k.access_key.permission === "FullAccess");
+    if (full.length) throw new Error(`${full.length} full-access key(s) on ${opts.contractId}: its code can still be replaced (not locked)`);
+    s.detail = `${keys.length} keys, all function-call keys on ${opts.contractId}. Nothing can redeploy the contract, move its funds or add keys outside its own code.`;
+    s.facts = keys.slice(0, 6).map((k) => {
+      const fc = k.access_key.permission.FunctionCall;
+      return [short(k.public_key, 10), `${(fc.method_names ?? []).join(", ")}`];
+    });
+  });
+
+  await step("source", async (s) => {
+    const meta = await rpc.view<any>(opts.contractId, "contract_source_metadata", {});
+    const acct = await rpc.call<any>("query", { request_type: "view_account", finality: "final", account_id: opts.contractId });
+    const b = meta?.build_info;
+    if (!b?.source_code_snapshot || !b?.build_environment) throw new Error("the contract does not report a reproducible build (NEP-330 build_info)");
+    s.detail = `Built in ${b.build_environment.split("@")[0]} from ${b.source_code_snapshot.replace(/^git\+/, "")}. Rebuild it and compare with code hash ${acct.code_hash}.`;
+    s.facts = [
+      ["Code hash", acct.code_hash],
+      ["Source", b.source_code_snapshot.replace(/^git\+/, "")],
+      ["Build image", b.build_environment],
+      ["Rebuild", `cargo near build reproducible-wasm --manifest-path ${b.contract_path ? `${b.contract_path}/` : ""}Cargo.toml`],
     ];
   });
 

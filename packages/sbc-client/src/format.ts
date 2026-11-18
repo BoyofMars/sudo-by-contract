@@ -26,6 +26,22 @@ export function actionCommand(action: string): string {
   return ACTION_VERBS[kind]?.command(target) ?? action;
 }
 
+const YOCTO_PER_NEAR = 10n ** 24n;
+
+/** "0.0100 NEAR" from a yoctoNEAR amount (string, bigint or number). */
+export function formatNear(yocto: string | bigint | number): string {
+  const v = BigInt(yocto);
+  const tenThousandths = v / (YOCTO_PER_NEAR / 10_000n);
+  return `${tenThousandths / 10_000n}.${(tenThousandths % 10_000n).toString().padStart(4, "0")} NEAR`;
+}
+
+/** yoctoNEAR from a decimal NEAR amount ("0.01" → 10^22). */
+export function parseNear(near: string): bigint {
+  const m = /^(\d+)(?:\.(\d{1,24}))?$/.exec(near.trim());
+  if (!m) throw new Error(`not a NEAR amount: ${near}`);
+  return BigInt(m[1]) * YOCTO_PER_NEAR + BigInt((m[2] ?? "").padEnd(24, "0"));
+}
+
 export function formatDuration(secs: number): string {
   if (secs >= 3600 && secs % 3600 === 0) return `${secs / 3600}h`;
   if (secs >= 60 && secs % 60 === 0) return `${secs / 60}m`;
