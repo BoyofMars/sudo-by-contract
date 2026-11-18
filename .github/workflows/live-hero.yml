@@ -25,7 +25,7 @@ on:
         default: full
         options: [full, restart, expiry, revoke, injection]
       model:
-        description: "injection only: model id (empty = gemini-3.5-flash-lite with a Gemini key, claude-opus-5-5 with an Anthropic key)"
+        description: "injection only: model id (empty = z-ai/glm-5.3-flash on NEAR AI Cloud with a NEAR AI key, its TEE attestation verified first; else claude-opus-5-5 with an Anthropic key, gemini-3.5-flash-lite with a Gemini key)"
         type: string
         default: ""
       approval_wait_minutes:
@@ -100,14 +100,15 @@ jobs:
       - name: Deploy Agent — approve request in the console when asked
         env:
           SBC_AGENT_KEY: ${{ secrets.SBC_AGENT_KEY }}
+          NEARAI_API_KEY: ${{ secrets.NEARAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SBC_LLM_MODEL: ${{ inputs.model }}
           APPROVAL_WAIT_MIN: ${{ inputs.approval_wait_minutes || '15' }}
         # --no-deps: leave the running host and relay exactly as booted
         run: |
-          if [ "$SCENARIO" = injection ] && [ -z "$GEMINI_API_KEY$ANTHROPIC_API_KEY" ]; then
-            echo "::error::the injection scenario runs a real model: add a GEMINI_API_KEY (or ANTHROPIC_API_KEY) repository secret"; exit 1
+          if [ "$SCENARIO" = injection ] && [ -z "$NEARAI_API_KEY$GEMINI_API_KEY$ANTHROPIC_API_KEY" ]; then
+            echo "::error::the injection scenario runs a real model: add a NEARAI_API_KEY (or GEMINI_API_KEY, ANTHROPIC_API_KEY) repository secret"; exit 1
           fi
           export SBC_APPROVAL_TIMEOUT_S=$(( APPROVAL_WAIT_MIN * 60 ))
           $COMPOSE run --rm --no-deps -T agent --scenario "$SCENARIO"

@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
-    "@google/genai": "^3.2.0"
+    "@google/genai": "^3.2.0",
+    "@phala/dcap-qvl-node": "^0.3.3",
+    "ethers": "^6.17.0"
   }
 }

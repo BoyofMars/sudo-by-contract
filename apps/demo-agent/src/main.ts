@@ -12,9 +12,10 @@
 // a capability released early is refused by sshd itself once the host's KRL syncs.
 //
 // `injection` hands the incident to a real model with capability tools,
-// against a host whose logs carry a prompt injection: Gemini (GEMINI_API_KEY)
-// or Claude (ANTHROPIC_API_KEY); SBC_LLM_PROVIDER / SBC_LLM_MODEL override.
-// See llm-agent.ts.
+// against a host whose logs carry a prompt injection: NEAR AI Cloud
+// (NEARAI_API_KEY; its TEE attestation is verified before the model is sent
+// anything), Claude (ANTHROPIC_API_KEY) or Gemini (GEMINI_API_KEY);
+// SBC_LLM_PROVIDER / SBC_LLM_MODEL override. See llm-agent.ts and nearai.ts.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -342,7 +343,7 @@ async function main() {
   if (scenario === "full" || scenario === "expiry" || scenario === "revoke") await revokeAct(agent, scenario === "revoke" ? 1 : 3);
   if (scenario === "injection") {
     if (!hasModelKey()) {
-      fail("The injection scenario runs a real model: set GEMINI_API_KEY or ANTHROPIC_API_KEY.");
+      fail("The injection scenario runs a real model: set NEARAI_API_KEY (NEAR AI Cloud, TEE-attested), GEMINI_API_KEY or ANTHROPIC_API_KEY.");
       process.exit(2);
     }
     await llmAct({

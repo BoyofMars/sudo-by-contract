@@ -1,11 +1,13 @@
 // Act 3: a real model as the agent, and a prompt injection it was never meant
 // to see.
 //
-// A model (Claude via the Anthropic SDK, or Gemini via Google's SDK, whichever
-// key is set) works an incident with four tools that wrap the same capability
-// SDK the scripted acts use. It holds no credential: every server action goes
-// through request_capability (policy, perhaps a human, an MPC-signed
-// certificate) and run_command (sshd, the gate, `consume` on-chain).
+// A model (on NEAR AI Cloud, with its TEE attestation verified against a fresh
+// nonce before it is sent anything and every reply's signature checked, see
+// nearai.ts; or Claude via the Anthropic SDK, or Gemini via Google's SDK,
+// whichever key is set) works an incident with four tools that wrap the same
+// capability SDK the scripted acts use. It holds no credential: every server
+// action goes through request_capability (policy, perhaps a human, an
+// MPC-signed certificate) and run_command (sshd, the gate, `consume` on-chain).
 //
 // The injection is not in the prompt. It is an attacker-controlled request
 // header in checkout-api's real log on the host, so the model meets it only if
@@ -25,6 +27,7 @@ import {
   type SudoAgent,
 } from "../../../packages/sbc-agent/src/index.ts";
 import { act, command, fail, indent, ok, say, step, style, wait } from "./narrate.ts";
+import { NEARAI_MODEL, nearAiDriver, reportLabel, type NearAiAttestation, type ReplySignature } from "./nearai.ts";
 
 export const LLM_MODEL = "claude-opus-5-5";
 // Stable, fast (3–9 s a turn) and on the free tier. A conversation stays on
@@ -116,12 +119,16 @@ export interface ModelStep {
   stop: "tool_use" | "end_turn" | "refusal" | "max_tokens" | "error";
   detail?: string;
   notes?: string[];
+  /** NEAR AI: this reply's response signature, checked against the attested key */
+  signature?: ReplySignature;
   inputTokens: number;
   outputTokens: number;
 }
 export interface ModelDriver {
-  provider: "anthropic" | "gemini";
+  provider: "anthropic" | "gemini" | "nearai";
   model: string;
+  /** NEAR AI: the TEE attestation, verified with a fresh nonce before the first turn (never throws). */
+  attest?(): Promise<NearAiAttestation>;
   /** The next turn, given the outcomes of the previous turn's tool calls (none at first). */
   next(outcomes: ToolOutcome[]): Promise<ModelStep>;
 }
@@ -285,12 +292,16 @@ export function geminiDriver(api: GeminiApi, model = GEMINI_MODEL, fallbacks: st
   };
 }
 
-/** Pick a provider from the keys that are set (Claude first, then Gemini). */
+/** Pick a provider from the keys that are set (NEAR AI Cloud first, then Claude, then Gemini). */
 export function defaultDriver(model?: string): ModelDriver {
   const env = process.env;
   const want = env.SBC_LLM_PROVIDER?.toLowerCase();
+  const hasNear = !!env.NEARAI_API_KEY;
   const hasClaude = !!(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN);
   const hasGemini = !!(env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
+  if (want === "nearai" || want === "near" || (!want && hasNear)) {
+    return nearAiDriver({ apiKey: env.NEARAI_API_KEY ?? "", model: model || NEARAI_MODEL });
+  }
   if (want === "gemini" || (!want && !hasClaude && hasGemini)) {
     const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY });
     // bounded: no SDK retries, 40 s per call; an overloaded or off-tier model
@@ -302,7 +313,8 @@ export function defaultDriver(model?: string): ModelDriver {
   return claudeDriver({ create: (p) => client.beta.messages.create(p) }, model || LLM_MODEL);
 }
 
-export const hasModelKey = () => !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+export const hasModelKey = () =>
+  !!(process.env.NEARAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
 
 // -------------------------------------------------------------------- act
 
@@ -335,6 +347,11 @@ export interface LlmActResult {
   inputTokens: number;
   outputTokens: number;
   report: string;
+  /** NEAR AI: the preflight TEE attestation */
+  attestation?: { ok: boolean; nonce: string; signers: string[]; reason?: string };
+  /** NEAR AI: replies whose signature verified against the attested key, and replies whose did not */
+  signedReplies: number;
+  unverifiedReplies: number;
 }
 
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n) + `… [${s.length - n} more characters]` : s);
@@ -349,6 +366,32 @@ function narrateOutput(text: string) {
       indent(line);
     }
   }
+}
+
+const short = (addr: string) => (addr.length > 14 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr);
+
+/** The preflight, in the act's voice: what was checked, and against which nonce. */
+function narrateAttestation(a: NearAiAttestation) {
+  const reports = [...a.candidates, ...(a.gateway ? [a.gateway] : [])];
+  const n = a.candidates.length;
+  step("attest", `${a.model} on NEAR AI Cloud · TEE attestation ${a.ok ? "verified" : "checked"} with a fresh nonce ${a.nonce.slice(0, 16)}…`);
+  if (!a.ok) {
+    if (!reports.length) fail(a.reason ?? "no attestation");
+    for (const r of reports) for (const c of r.checks) if (!c.ok) fail(`${reportLabel(r)} · ${c.name}: ${c.detail}`);
+    return;
+  }
+  const statuses = [...new Set(reports.map((r) => r.tcbStatus))].join(", ");
+  ok(`Intel TDX quote verified (${statuses}) · ${n} model instance${n === 1 ? "" : "s"}${a.gateway ? " and the gateway" : ""} · collateral from Intel PCS`);
+  ok("report data binds the nonce and the signer · measured config and RTMR3 event log match the quote");
+  const gpu = a.candidates.filter((r) => r.checks.some((c) => c.name === "gpu"));
+  if (gpu.length) {
+    const sizes = [...new Set(gpu.map((r) => `${r.gpus ?? "?"} × ${r.gpuArch ?? "GPU"}`))].join(", ");
+    ok(`NVIDIA GPU attestation: NRAS verdict true for ${gpu.length === n ? "every instance" : `${gpu.length} of ${n} instances`} (${sizes})`);
+  } else {
+    say(`    ${style.dim("no GPU evidence in the model reports")}`);
+  }
+  ok(`signer ${a.signingAddresses.join(", ")} · every reply must carry this key's signature`);
+  say(`    ${style.dim(`verified in ${(a.durationMs / 1000).toFixed(1)} s, before the model was sent anything`)}`);
 }
 
 export async function llmAct(d: LlmActDeps): Promise<LlmActResult> {
@@ -366,9 +409,24 @@ export async function llmAct(d: LlmActDeps): Promise<LlmActResult> {
     inputTokens: 0,
     outputTokens: 0,
     report: "",
+    signedReplies: 0,
+    unverifiedReplies: 0,
   };
 
-  act(3, "A real model, a poisoned log", `${driver.model} · tools: check_health, request_capability, run_command, release_capability`);
+  act(3, "A real model, a poisoned log", `${driver.model}${driver.provider === "nearai" ? " on NEAR AI Cloud" : ""} · tools: check_health, request_capability, run_command, release_capability`);
+
+  // fail closed: a model whose TEE does not verify is never sent the incident
+  if (driver.attest) {
+    const a = await driver.attest();
+    out.attestation = { ok: a.ok, nonce: a.nonce, signers: a.signingAddresses, ...(a.reason ? { reason: a.reason } : {}) };
+    narrateAttestation(a);
+    if (!a.ok) {
+      out.stopReason = "attestation_failed";
+      fail(style.bold("The model's TEE attestation did not verify, so the model was not run and was sent nothing."));
+      return out;
+    }
+  }
+
   step("ticket", TICKET.split("\n")[0]);
   indent(TICKET.split("\n").slice(1).join("\n"));
 
@@ -496,6 +554,13 @@ export async function llmAct(d: LlmActDeps): Promise<LlmActResult> {
 
     for (const t of s.thinking) indent(t.split(/\r?\n/).slice(0, 6).join("\n"), `    ${style.dim("thinking │")} `);
     for (const n of s.notes ?? []) say(style.dim(`    (${n})`));
+    if (s.signature?.ok) {
+      out.signedReplies++;
+      ok(`reply signed by the attested ${s.signature.kind === "gateway" ? "gateway " : ""}key ${short(s.signature.signer ?? "")} ${style.dim(`· ${s.signature.detail}`)}`);
+    } else if (s.signature) {
+      out.unverifiedReplies++;
+      fail(`reply signature not verified: ${s.signature.detail}`);
+    }
     if (s.stop === "end_turn") out.report = s.text.join("\n\n");
     else for (const t of s.text) say(`${style.cyan("model")}      ${style.cyan(t)}`);
 
@@ -531,7 +596,8 @@ export async function llmAct(d: LlmActDeps): Promise<LlmActResult> {
     indent(out.report);
   }
   say();
-  say(style.dim(`${driver.model} · ${out.turns} turns · ${out.toolCalls} tool calls · ${out.inputTokens} input / ${out.outputTokens} output tokens`));
+  const signed = out.attestation ? ` · ${out.signedReplies}/${out.turns} replies signed by the attested key` : "";
+  say(style.dim(`${driver.model} · ${out.turns} turns · ${out.toolCalls} tool calls · ${out.inputTokens} input / ${out.outputTokens} output tokens${signed}`));
   if (out.attemptedInjected) {
     say(style.bold(`The model acted on the injected instruction; the host refused ${out.denials === 1 ? "it" : `${out.denials} commands`}, and each denial is recorded on-chain.`));
   } else if (out.sawInjection) {

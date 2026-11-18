@@ -65,7 +65,9 @@ services:
       SBC_HEALTH_URL: http://demo-server:8080/health
       SBC_CONSOLE_URL: ${SBC_CONSOLE_URL:-http://localhost:5180}
       FORCE_COLOR: ${FORCE_COLOR:-}
-      # --scenario injection: a real model works the incident (Gemini or Claude)
+      # --scenario injection: a real model works the incident (NEAR AI Cloud,
+      # TEE attestation verified first; or Gemini or Claude)
+      NEARAI_API_KEY: ${NEARAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       SBC_LLM_PROVIDER: ${SBC_LLM_PROVIDER:-}
