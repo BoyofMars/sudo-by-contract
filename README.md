@@ -89,6 +89,17 @@ agent. Every one is denied, and every denial is on-chain:
 
 ![The live audit log: the injected commands denied as on-chain events #157 to #159](docs/media/audit-injection-denied.png)
 
+**On NEAR AI Cloud, the model is attested before it is trusted.** With a `NEARAI_API_KEY`, the
+injection act runs `z-ai/glm-5.3-flash` on NEAR AI Cloud ([`apps/demo-agent/src/nearai.ts`](apps/demo-agent/src/nearai.ts)).
+Before the model is sent anything, the agent fetches its TEE attestation with a fresh 32-byte
+nonce and verifies every report: the Intel TDX quote (dcap-qvl against Intel's collateral),
+report data binding the nonce and the model's signing key, the measured configuration and the
+RTMR3 event log, the debug bit, and the NVIDIA GPU evidence (NRAS, same nonce). Then every reply
+must carry a signature that recovers to that attested key over the exact request and response
+bytes. If the attestation fails, the act refuses to run the model. The attestation check runs
+live today (3 model instances and the gateway, all verified); the first full live run of the act
+on NEAR AI is pending its API key.
+
 ### Revoked means refused by OpenSSH itself
 
 In [run 44361287870](https://github.com/BoyofMars/sudo-by-contract/actions/runs/44361287870)
@@ -251,7 +262,7 @@ spending limits and policy-bound wallets. Sudo by Contract governs what an agent
 | Real sshd | **14 of 14** in CI on Linux (`sandbox/ci/sshd-integration.sh`): the approved restart runs; `cat /etc/shadow`, out-of-scope, second-use and injected commands are denied; shells, PTYs and port forwarding are refused; sshd itself rejects expired, wrong-host, revoked and certificate-less logins. |
 | Live testnet, end to end | **22 of 22** with `scripts/e2e-testnet.ts`, then the scheduled live-hero runs. The first live run caught two bugs the offline tests missed; both are fixed ([docs/LIVE_RUN.md](docs/LIVE_RUN.md)). |
 | Revocation reaches sshd, live | Every scheduled live-hero run revokes a capability early and records sshd refusing the still-valid certificate (`revoked by file …sbc_revoked.krl`). |
-| All of it | **87 Rust tests** (`cargo test --workspace`), **3 sandbox tests** on a NEAR node (`cargo test -p sbc-policy --test sandbox -- --ignored`, in CI) and **44 TypeScript tests** (`npm test`); `tsc` clean. |
+| All of it | **87 Rust tests** (`cargo test --workspace`), **3 sandbox tests** on a NEAR node (`cargo test -p sbc-policy --test sandbox -- --ignored`, in CI) and **55 TypeScript tests** (`npm test`, including 11 for the NEAR AI attestation and reply signatures, one of them on a real captured Intel quote); `tsc` clean. |
 
 ## Where this goes
 
@@ -265,6 +276,7 @@ agent needs power for a moment, not forever, the same loop fits.
 * k-of-n admin quorum, revocation down to sshd's KRL, a public proof page, live CI on testnet
 * Pay per session: priced servers, prepaid agent balances, payment to the server owner on issue
 * A locked, reproducibly built contract (NEP-330), and sandbox tests on a real NEAR runtime
+* A NEAR AI Cloud model whose TEE attestation is verified with a fresh nonce before it acts
 
 **Next**
 * **USDC and NEAR Intents:** fund agents in USDC (NEP-141 `ft_transfer_call`) and settle
@@ -338,7 +350,7 @@ others do well and where trust sits in each.
 
 * Built at **NEAR HACKATHON** (November 2026) for the **AI Security & Defense** and **Open Innovation** tracks.
 * **Demo post:** [the 2-minute video and thread on X](https://x.com/TheBoyOfMars/status/2121227594725011555).
-* **The judged submission is tag [`hackathon-submission`](https://github.com/BoyofMars/sudo-by-contract/tree/hackathon-submission)** (development ended 2026-11-14 23:59 UTC). Everything below was added after the deadline, on branch `v2`: pay per session, the locked and reproducibly built contract, sandbox tests, the live revocation act and the two new proof checks ([compare](https://github.com/BoyofMars/sudo-by-contract/compare/hackathon-submission...v2)).
+* **The judged submission is tag [`hackathon-submission`](https://github.com/BoyofMars/sudo-by-contract/tree/hackathon-submission)** (development ended 2026-11-14 23:59 UTC). Everything below was added after the deadline, on branch `v2`: pay per session, the locked and reproducibly built contract, sandbox tests, the live revocation act, the two new proof checks and the NEAR AI Cloud model with verified attestation ([compare](https://github.com/BoyofMars/sudo-by-contract/compare/hackathon-submission...v2)).
 * **All code in this repository was written during the hackathon** (first commit 2026-11-10). No pre-existing code, starter template or boilerplate.
 * **Built with:** Rust: `near-sdk` 5.30 (contract); `ed25519-dalek`, `sha2`, `base64`, `bs58`, `hex`, `serde`/`serde_json`, `toml`, `ureq` (gate). TypeScript on Node 26: borsh, NEAR transactions and OpenSSH encoding are hand-written (`@near-js/crypto` and `@near-js/transactions` are dev-only, to check our bytes match); the only runtime npm dependencies are the model SDKs for the demo agent's model act, `@google/genai` (Gemini) and `@anthropic-ai/sdk` (Claude). Console: React 19, Vite 8, Inter and JetBrains Mono via Fontsource. Tooling: `cargo-near`, `near-cli-rs`, OpenSSH, Docker, GitHub Actions, Vercel.
 * **NEAR integration:** the policy contract runs on NEAR testnet; **NEAR Chain Signatures** (MPC, Ed25519 domain) is the SSH certificate authority, with the CA key derived for the contract's account; **function-call access keys** on the contract account are the identity layer for admins, approvers, agents and hosts; every authorisation event is a NEP-297 event in a hash-chained, on-chain audit log.
